@@ -1,22 +1,23 @@
 import streamlit as st
 import random
+from datetime import date
 
 st.set_page_config(
-    page_title="MBTI 진로 추천 앱",
-    page_icon="🌈",
+    page_title="MBTI 오늘의 운세",
+    page_icon="🔮",
     layout="wide"
 )
 
 st.markdown("""
 <style>
 .stApp {
-    background: linear-gradient(135deg, #FFE5EC, #E0F7FA, #EDE7F6);
+    background: linear-gradient(135deg, #ffe4f2, #e0f7ff, #fff7cc);
 }
 .title {
     text-align: center;
-    font-size: 48px;
-    font-weight: bold;
-    color: #7B1FA2;
+    font-size: 52px;
+    font-weight: 900;
+    color: #8e24aa;
 }
 .subtitle {
     text-align: center;
@@ -24,178 +25,168 @@ st.markdown("""
     color: #444;
 }
 .card {
-    background-color: white;
-    padding: 25px;
-    border-radius: 25px;
-    box-shadow: 0px 6px 18px rgba(0,0,0,0.15);
-    margin: 15px 0;
+    background: rgba(255,255,255,0.88);
+    padding: 26px;
+    border-radius: 28px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.16);
+    margin: 18px 0;
+    border: 3px solid #f8bbd0;
 }
-.job {
-    font-size: 25px;
-    font-weight: bold;
-    color: #D81B60;
+.big {
+    font-size: 34px;
+    font-weight: 800;
+    color: #d81b60;
 }
-.desc {
-    font-size: 18px;
+.text {
+    font-size: 19px;
     color: #333;
+    line-height: 1.7;
+}
+.score {
+    font-size: 26px;
+    font-weight: bold;
+    color: #3949ab;
 }
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown('<div class="title">🌈✨ MBTI 진로 추천 웹앱 ✨🌈</div>', unsafe_allow_html=True)
-st.markdown('<div class="subtitle">나의 성향에 어울리는 직업을 찾아보세요! 💼🚀🎨📚</div>', unsafe_allow_html=True)
+st.markdown('<div class="title">🔮✨ MBTI 오늘의 운세 ✨🔮</div>', unsafe_allow_html=True)
+st.markdown('<div class="subtitle">MBTI와 출생년도를 입력하면 오늘의 행운 메시지를 알려드려요 🌈🍀💖</div>', unsafe_allow_html=True)
 
 st.write("")
 st.write("")
 
-mbti_jobs = {
-    "ISTJ": {
-        "emoji": "📋🧠",
-        "name": "현실적이고 책임감 있는 관리자형",
-        "jobs": ["공무원", "회계사", "데이터 분석가", "법무사", "품질관리 전문가"],
-        "reason": "꼼꼼하고 책임감이 강해서 정확성과 신뢰가 중요한 직업에 잘 어울려요."
-    },
-    "ISFJ": {
-        "emoji": "🤝🌷",
-        "name": "따뜻하고 성실한 보호자형",
-        "jobs": ["간호사", "교사", "사회복지사", "상담사", "행정직"],
-        "reason": "다른 사람을 돕고 배려하는 능력이 뛰어나 사람을 지원하는 직업에 적합해요."
-    },
-    "INFJ": {
-        "emoji": "🌙📖",
-        "name": "통찰력 있는 조언자형",
-        "jobs": ["심리상담사", "작가", "교사", "기획자", "사회운동가"],
-        "reason": "사람의 마음을 잘 이해하고 의미 있는 일을 추구하는 성향이 강해요."
-    },
-    "INTJ": {
-        "emoji": "♟️🔬",
-        "name": "전략적인 설계자형",
-        "jobs": ["연구원", "개발자", "전략기획자", "건축가", "AI 전문가"],
-        "reason": "논리적이고 장기적인 계획을 잘 세워 분석과 전략이 필요한 직업에 어울려요."
-    },
-    "ISTP": {
-        "emoji": "🛠️🏍️",
-        "name": "실용적인 문제해결자형",
-        "jobs": ["엔지니어", "파일럿", "정비사", "경찰관", "응급구조사"],
-        "reason": "손으로 직접 다루고 문제를 해결하는 능력이 뛰어나요."
-    },
-    "ISFP": {
-        "emoji": "🎨🌿",
-        "name": "감성적인 예술가형",
-        "jobs": ["디자이너", "플로리스트", "요리사", "음악가", "동물관련 직업"],
-        "reason": "감각적이고 섬세해서 아름다움과 감성을 표현하는 직업에 잘 맞아요."
-    },
-    "INFP": {
-        "emoji": "🦋✍️",
-        "name": "이상적인 중재자형",
-        "jobs": ["작가", "상담사", "콘텐츠 크리에이터", "예술가", "비영리단체 활동가"],
-        "reason": "자신만의 가치관이 뚜렷하고 창의적인 표현을 잘해요."
-    },
-    "INTP": {
-        "emoji": "🧪💡",
-        "name": "논리적인 사색가형",
-        "jobs": ["프로그래머", "과학자", "교수", "데이터 사이언티스트", "철학자"],
-        "reason": "호기심이 많고 복잡한 문제를 분석하는 데 강점이 있어요."
-    },
-    "ESTP": {
-        "emoji": "🔥🏆",
-        "name": "활동적인 도전가형",
-        "jobs": ["창업가", "영업 전문가", "스포츠 지도자", "경찰관", "마케터"],
-        "reason": "에너지가 넘치고 순발력이 좋아 빠르게 움직이는 직업에 잘 맞아요."
-    },
-    "ESFP": {
-        "emoji": "🎤🎉",
-        "name": "사교적인 연예인형",
-        "jobs": ["배우", "방송인", "이벤트 기획자", "승무원", "서비스직"],
-        "reason": "사람들과 어울리는 것을 좋아하고 분위기를 밝게 만드는 능력이 있어요."
-    },
-    "ENFP": {
-        "emoji": "🌟🚀",
-        "name": "재기발랄한 활동가형",
-        "jobs": ["광고기획자", "크리에이터", "상담사", "교사", "마케터"],
-        "reason": "창의적이고 열정적이라 새로운 아이디어를 내는 직업에 어울려요."
-    },
-    "ENTP": {
-        "emoji": "⚡🗣️",
-        "name": "논쟁을 즐기는 발명가형",
-        "jobs": ["창업가", "변호사", "기획자", "컨설턴트", "개발자"],
-        "reason": "토론과 아이디어 발상이 뛰어나 새로운 도전을 즐기는 직업에 적합해요."
-    },
-    "ESTJ": {
-        "emoji": "📊👔",
-        "name": "체계적인 관리자형",
-        "jobs": ["경영자", "공무원", "군인", "프로젝트 매니저", "금융 전문가"],
-        "reason": "조직을 관리하고 목표를 달성하는 능력이 뛰어나요."
-    },
-    "ESFJ": {
-        "emoji": "💖🏫",
-        "name": "친절한 협력자형",
-        "jobs": ["교사", "간호사", "상담사", "인사담당자", "서비스 매니저"],
-        "reason": "사람들과 협력하고 분위기를 조화롭게 만드는 능력이 좋아요."
-    },
-    "ENFJ": {
-        "emoji": "🌻🎓",
-        "name": "따뜻한 리더형",
-        "jobs": ["교사", "강연가", "상담사", "HR 전문가", "사회복지사"],
-        "reason": "사람을 이끌고 성장시키는 데 큰 보람을 느끼는 유형이에요."
-    },
-    "ENTJ": {
-        "emoji": "👑🚀",
-        "name": "대담한 통솔자형",
-        "jobs": ["CEO", "경영컨설턴트", "변호사", "정치인", "프로젝트 리더"],
-        "reason": "목표지향적이고 리더십이 강해서 조직을 이끄는 직업에 잘 맞아요."
-    }
+mbti_list = [
+    "ISTJ", "ISFJ", "INFJ", "INTJ",
+    "ISTP", "ISFP", "INFP", "INTP",
+    "ESTP", "ESFP", "ENFP", "ENTP",
+    "ESTJ", "ESFJ", "ENFJ", "ENTJ"
+]
+
+fortune_messages = [
+    "오늘은 작은 도전이 큰 기회로 이어질 수 있어요 🚀",
+    "말 한마디가 좋은 인연을 만들어 줄 수 있는 날이에요 💬💕",
+    "조급해하지 않으면 원하는 결과에 가까워질 수 있어요 🌱",
+    "새로운 아이디어가 떠오르기 좋은 하루예요 💡✨",
+    "평소보다 자신감을 가지고 행동해도 좋은 날이에요 🔥",
+    "주변 사람의 도움을 기분 좋게 받아들이면 행운이 커져요 🤝🍀",
+    "정리정돈을 하면 마음도 함께 가벼워질 수 있어요 🧹🌈",
+    "오늘은 감정보다 차분한 판단이 행운을 불러와요 🧠⭐",
+    "웃는 얼굴이 좋은 기운을 끌어당기는 하루예요 😊💖",
+    "미뤄둔 일을 하나만 끝내도 만족감이 커질 거예요 ✅🎉"
+]
+
+lucky_items = [
+    "파란색 볼펜 🖊️", "딸기 우유 🍓", "하얀 운동화 👟",
+    "노란 메모지 📝", "초콜릿 🍫", "작은 거울 🪞",
+    "이어폰 🎧", "분홍색 소품 💗", "따뜻한 차 🍵", "책 한 권 📚"
+]
+
+lucky_colors = [
+    "핑크 💗", "하늘색 🩵", "노랑 💛", "보라 💜",
+    "민트 💚", "흰색 🤍", "주황 🧡", "빨강 ❤️"
+]
+
+advice_by_mbti = {
+    "I": "혼자만의 시간을 조금 가지면 에너지가 충전돼요 🌙",
+    "E": "사람들과 대화할수록 좋은 기운이 생겨요 🎉",
+    "S": "눈앞의 할 일을 차근차근 해내면 운이 좋아져요 📌",
+    "N": "상상력과 아이디어를 마음껏 펼쳐보세요 🌟",
+    "T": "논리적인 판단이 좋은 결과를 가져와요 🧠",
+    "F": "따뜻한 말과 배려가 행운을 불러와요 💕",
+    "J": "계획표를 세우면 하루가 더 편안해져요 📅",
+    "P": "즉흥적인 선택이 의외의 즐거움을 줄 수 있어요 🎈"
 }
-
-mbti_list = list(mbti_jobs.keys())
 
 col1, col2, col3 = st.columns([1, 2, 1])
 
 with col2:
-    selected_mbti = st.selectbox(
-        "🌟 나의 MBTI를 선택하세요!",
-        mbti_list
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+
+    mbti = st.selectbox("🌟 MBTI를 선택하세요", mbti_list)
+    birth_year = st.number_input(
+        "🎂 출생년도를 입력하세요",
+        min_value=1950,
+        max_value=date.today().year,
+        value=2008,
+        step=1
     )
 
-    if st.button("💖 직업 추천 받기 💖"):
-        info = mbti_jobs[selected_mbti]
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    if st.button("🔮 오늘의 운세 보기 🔮"):
+        today = date.today()
+
+        seed_value = f"{mbti}-{birth_year}-{today}"
+        random.seed(seed_value)
+
+        total_score = random.randint(70, 100)
+        love_score = random.randint(60, 100)
+        study_score = random.randint(60, 100)
+        money_score = random.randint(60, 100)
+        health_score = random.randint(60, 100)
+
+        fortune = random.choice(fortune_messages)
+        item = random.choice(lucky_items)
+        color = random.choice(lucky_colors)
+
+        mbti_advice = [
+            advice_by_mbti[mbti[0]],
+            advice_by_mbti[mbti[1]],
+            advice_by_mbti[mbti[2]],
+            advice_by_mbti[mbti[3]]
+        ]
 
         st.balloons()
 
         st.markdown(f"""
         <div class="card">
-            <h2>{info["emoji"]} {selected_mbti}</h2>
-            <h3>✨ {info["name"]} ✨</h3>
-            <p class="desc">{info["reason"]}</p>
+            <div class="big">🌈 {today} 오늘의 운세 🌈</div>
+            <p class="text">
+            ✨ <b>{mbti}</b> 유형, <b>{birth_year}년생</b>의 오늘 운세입니다! ✨<br><br>
+            🔮 {fortune}
+            </p>
         </div>
         """, unsafe_allow_html=True)
 
-        st.subheader("💼 추천 직업 TOP 5")
+        st.markdown(f"""
+        <div class="card">
+            <div class="big">🍀 종합 운세 점수</div>
+            <p class="score">⭐ {total_score}점 / 100점 ⭐</p>
+        </div>
+        """, unsafe_allow_html=True)
 
-        for i, job in enumerate(info["jobs"], start=1):
-            st.markdown(f"""
-            <div class="card">
-                <div class="job">🌟 {i}. {job}</div>
-                <div class="desc">이 직업은 {selected_mbti} 유형의 성향과 잘 어울릴 수 있어요! 💕</div>
-            </div>
-            """, unsafe_allow_html=True)
+        a, b, c, d = st.columns(4)
 
-        st.success("🎉 진로 선택은 MBTI만으로 결정하지 말고, 흥미·능력·가치관도 함께 생각해보세요!")
+        with a:
+            st.metric("💕 애정운", f"{love_score}점")
+        with b:
+            st.metric("📚 공부운", f"{study_score}점")
+        with c:
+            st.metric("💰 금전운", f"{money_score}점")
+        with d:
+            st.metric("💪 건강운", f"{health_score}점")
 
-st.write("")
+        st.markdown(f"""
+        <div class="card">
+            <div class="big">🎁 오늘의 행운 아이템</div>
+            <p class="text">🍀 {item}</p>
+            <div class="big">🎨 오늘의 행운 색깔</div>
+            <p class="text">🌈 {color}</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.markdown("""
+        <div class="card">
+            <div class="big">💌 MBTI 맞춤 조언</div>
+        """, unsafe_allow_html=True)
+
+        for advice in mbti_advice:
+            st.write(f"✨ {advice}")
+
+        st.markdown("</div>", unsafe_allow_html=True)
+
+        st.success("🌟 오늘 하루도 반짝반짝 빛나는 하루 보내세요! ✨💖🌈")
+
 st.write("---")
-
-st.markdown("### 🎯 진로 탐색 꿀팁")
-col_a, col_b, col_c = st.columns(3)
-
-with col_a:
-    st.info("💡 내가 좋아하는 활동을 적어보기")
-
-with col_b:
-    st.warning("📚 관련 학과와 과목 찾아보기")
-
-with col_c:
-    st.success("🚀 실제 직업인의 인터뷰 찾아보기")
-
-st.write("---")
-st.caption("🌈 이 앱은 진로교육 활동용 예시 앱입니다. MBTI 결과는 참고용으로만 활용하세요.")
+st.caption("🔮 이 앱은 재미와 진로·상담 활동용 예시입니다. 실제 운세와는 관련이 없어요 😊")
