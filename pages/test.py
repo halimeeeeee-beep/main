@@ -1,18 +1,16 @@
 import streamlit as st
 import yfinance as yf
-import pandas as pd
 import plotly.graph_objects as go
 
 st.set_page_config(
-    page_title="🌍 글로벌 시가총액 TOP10 대시보드",
+    page_title="글로벌 시가총액 TOP10 주식 대시보드",
     page_icon="📈",
     layout="wide"
 )
 
 st.title("🌍 글로벌 시가총액 TOP10 주식 대시보드")
-st.caption("📡 Yahoo Finance에서 실시간으로 데이터를 가져옵니다.")
+st.caption("📡 Yahoo Finance 데이터를 실시간으로 가져와 시각화합니다.")
 
-# 글로벌 시가총액 TOP10 (필요 시 수정 가능)
 stocks = {
     "🟢 NVIDIA": "NVDA",
     "🍎 Apple": "AAPL",
@@ -27,66 +25,81 @@ stocks = {
 }
 
 selected = st.multiselect(
-    "비교할 기업을 선택하세요",
+    "📌 비교할 기업을 선택하세요",
     options=list(stocks.keys()),
     default=list(stocks.keys())
 )
 
-@st.cache_data(ttl=300)   # 5분마다 최신 데이터 갱신
+@st.cache_data(ttl=300)
 def load_data(ticker):
-    df = yf.download(
-        ticker,
+    df = yf.Ticker(ticker).history(
         period="1y",
         interval="1d",
-        auto_adjust=True,
-        progress=False
+        auto_adjust=True
     )
     return df
 
 fig = go.Figure()
 
-for company in selected:
-    ticker = stocks[company]
-    df = load_data(ticker)
+if selected:
+    for company in selected:
+        ticker = stocks[company]
+        df = load_data(ticker)
 
-    if len(df) > 0:
-        # 시작 가격을 100으로 정규화
-        normalized = df["Close"] / df["Close"].iloc[0] * 100
+        if df.empty:
+            st.warning(f"{company} 데이터를 가져오지 못했습니다.")
+            continue
+
+        close = df["Close"].dropna()
+
+        if len(close) == 0:
+            st.warning(f"{company} 종가 데이터가 없습니다.")
+            continue
+
+        normalized = close / close.iloc[0] * 100
 
         fig.add_trace(
             go.Scatter(
-                x=df.index,
-                y=normalized,
+                x=normalized.index,
+                y=normalized.values,
                 mode="lines",
                 name=company,
-                hovertemplate="%{x}<br>%{y:.2f}<extra></extra>"
+                hovertemplate="%{x}<br>주가 지수: %{y:.2f}<extra></extra>"
             )
         )
 
-fig.update_layout(
-    title="📈 최근 1년간 주가 변화 (시작일 = 100)",
-    xaxis_title="날짜",
-    yaxis_title="주가 지수",
-    hovermode="x unified",
-    template="plotly_dark",
-    height=700
-)
+    fig.update_layout(
+        title="📈 최근 1년간 주가 변화 비교 (시작일 = 100)",
+        xaxis_title="날짜",
+        yaxis_title="주가 지수",
+        hovermode="x unified",
+        template="plotly_white",
+        height=700,
+        legend_title_text="기업"
+    )
 
-st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True)
 
-# 현재 가격 표시
-st.subheader("💰 현재 주가")
+    st.subheader("💰 현재 주가")
 
-cols = st.columns(5)
+    cols = st.columns(5)
 
-for i, company in enumerate(selected):
-    ticker = stocks[company]
-    info = yf.Ticker(ticker)
+    for i, company in enumerate(selected):
+        ticker = stocks[company]
+        df = load_data(ticker)
 
-    try:
-        price = info.fast_info["lastPrice"]
-        cols[i % 5].metric(company, f"${price:,.2f}")
-    except:
-        cols[i % 5].metric(company, "조회 실패")
+        if not df.empty and "Close" in df.columns:
+            current_price = df["Close"].dropna().iloc[-1]
+            first_price = df["Close"].dropna().iloc[0]
+            change_rate = ((current_price - first_price) / first_price) * 100
 
-st.success("✅ 데이터는 Yahoo Finance에서 실시간으로 가져옵니다.")
+            cols[i % 5].metric(
+                label=company,
+                value=f"${current_price:,.2f}",
+                delta=f"{change_rate:.2f}%"
+            )
+        else:
+            cols[i % 5].metric(company, "조회 실패")
+
+else:
+    st.warning("기업을 1개 이상 선택해주세요.")
