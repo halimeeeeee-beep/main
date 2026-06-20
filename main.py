@@ -429,18 +429,60 @@ if analysis_mode == "🎨 K-Means 군집 분석":
     with c3:
         k = st.selectbox("군집 개수 K 선택", list(range(2, 11)), index=2)
 
-    X = data2d[[x_col, y_col]].dropna()
+    label_candidates = categorical_columns(data2d)
+    label_candidates = [c for c in label_candidates if c not in [x_col, y_col]]
+
+    if len(label_candidates) > 0:
+        label_col = st.selectbox(
+            "🧠 군집 결과를 어떤 세포 정보로 해석할까요?",
+            label_candidates,
+            help="K-Means는 숫자 좌표를 보고 자동으로 묶습니다. 여기서 선택한 메타데이터 열로 각 군집이 어떤 세포 유형에 가까운지 해석합니다."
+        )
+    else:
+        label_col = None
+        st.warning("해석에 사용할 문자형 메타데이터 열이 없어 cluster 번호만 출력합니다.")
+
+    use_cols = [x_col, y_col] + ([label_col] if label_col else [])
+    df_kmeans = data2d[use_cols].dropna()
+
+    X = df_kmeans[[x_col, y_col]]
     model = KMeans(n_clusters=k, random_state=42, n_init=10)
     labels = model.fit_predict(X)
 
-    plot_df = X.copy()
+    plot_df = df_kmeans.copy()
     plot_df["cluster"] = labels.astype(str)
+
+    if label_col:
+        summary = (
+            plot_df.groupby("cluster")[label_col]
+            .agg(lambda s: s.value_counts().index[0])
+            .reset_index()
+            .rename(columns={label_col: "대표 세포 유형"})
+        )
+
+        counts = plot_df.groupby("cluster").size().reset_index(name="세포 수")
+        purity = (
+            plot_df.groupby("cluster")[label_col]
+            .agg(lambda s: round(s.value_counts(normalize=True).iloc[0] * 100, 1))
+            .reset_index()
+            .rename(columns={label_col: "대표 유형 비율(%)"})
+        )
+
+        cluster_result = counts.merge(summary, on="cluster").merge(purity, on="cluster")
+        cluster_name_map = dict(zip(cluster_result["cluster"], cluster_result["대표 세포 유형"]))
+        plot_df["군집 해석"] = plot_df["cluster"].map(cluster_name_map)
+        color_target = "군집 해석"
+    else:
+        cluster_result = plot_df["cluster"].value_counts().sort_index().reset_index()
+        cluster_result.columns = ["cluster", "세포 수"]
+        color_target = "cluster"
 
     fig = px.scatter(
         plot_df,
         x=x_col,
         y=y_col,
-        color="cluster",
+        color=color_target,
+        hover_data=["cluster"] + ([label_col, "군집 해석"] if label_col else []),
         title=f"🎨 K-Means 군집 결과: K={k}",
         template="plotly_white",
         opacity=0.82
@@ -448,10 +490,25 @@ if analysis_mode == "🎨 K-Means 군집 분석":
     fig = style_plotly(fig)
     st.plotly_chart(fig, use_container_width=True)
 
-    st.markdown("### 🏆 군집별 세포 수")
-    cluster_count = plot_df["cluster"].value_counts().sort_index().reset_index()
-    cluster_count.columns = ["cluster", "count"]
-    st.dataframe(cluster_count, use_container_width=True)
+    st.markdown("### 🧠 군집 결과 해석")
+    st.info(
+        "K-Means는 정답 라벨을 보고 분류하는 것이 아니라, 선택한 X/Y 좌표에서 가까운 세포끼리 자동으로 묶습니다. "
+        "아래 표의 '대표 세포 유형'은 각 군집 안에서 가장 많이 등장한 메타데이터 라벨입니다."
+    )
+    st.dataframe(cluster_result, use_container_width=True)
+
+    if label_col:
+        st.markdown("### 🔎 세포별 군집 분류 결과")
+        output_cols = [x_col, y_col, "cluster", "군집 해석", label_col]
+        st.dataframe(plot_df[output_cols].head(200), use_container_width=True)
+
+        csv = plot_df[output_cols].to_csv(index=False).encode("utf-8-sig")
+        st.download_button(
+            "📥 군집 분류 결과 CSV 다운로드",
+            data=csv,
+            file_name="kmeans_cell_classification_result.csv",
+            mime="text/csv"
+        )
 
 
 elif analysis_mode == "🌳 의사결정트리 분류":
