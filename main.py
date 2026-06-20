@@ -27,12 +27,12 @@ st.markdown("""
     font-size: 46px;
     font-weight: 900;
     text-align: center;
-    color: #5b21b6;
+    color: #7c3aed;
 }
 .sub-title {
     text-align: center;
     font-size: 20px;
-    color: #374151;
+    color: #222222;
 }
 .card {
     background: white;
