@@ -21,65 +21,81 @@ st.set_page_config(
 st.markdown("""
 <style>
 
-/* 전체 배경 */
-.stApp {
-    background: linear-gradient(
-        135deg,
-        #fff4f8 0%,
-        #eef8ff 50%,
-        #f4fff2 100%
-    );
+/* 🌸 전체 배경 */
+.stApp,
+[data-testid="stAppViewContainer"] {
+    background: #FFE4EC;
 }
 
-/* 전체 글씨 */
-html, body, p, div, span, label {
-    color: #111111 !important;
+/* 🌸 헤더 투명 */
+[data-testid="stHeader"] {
+    background: rgba(255,255,255,0);
 }
 
-/* 제목 */
+/* 🌸 사이드바 */
+[data-testid="stSidebar"] {
+    background: #FFD6E7;
+}
+
+/* 🌸 제목 */
 .big-title {
     font-size: 48px;
     font-weight: 900;
     text-align: center;
-    color: #6d28d9 !important;
+    color: #D63384;
 }
 
-/* 부제목 */
+/* 🌸 부제목 */
 .sub-title {
+    text-align: center;
     font-size: 22px;
     font-weight: bold;
-    text-align: center;
-    color: #222222 !important;
+    color: #8A285B;
 }
 
-/* Metric 제목 */
+/* 🌸 일반 글씨 */
+html, body, p, div, span, label, h1, h2, h3, h4, h5 {
+    color: #333333 !important;
+}
+
+/* 🌸 Metric 제목 */
 [data-testid="stMetricLabel"] {
-    color: #444444 !important;
-    font-weight: bold !important;
+    color: #8A285B !important;
+    font-weight: bold;
 }
 
-/* Metric 숫자 */
+/* 🌸 Metric 숫자 */
 [data-testid="stMetricValue"] {
-    color: #7c3aed !important;
-    font-size: 42px !important;
-    font-weight: 900 !important;
+    color: #D63384 !important;
+    font-weight: 900;
+    font-size: 42px;
 }
 
-/* Selectbox */
+/* 🌸 Metric 카드 */
+div[data-testid="stMetric"] {
+    background: rgba(255,255,255,0.9);
+    padding: 15px;
+    border-radius: 18px;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.08);
+}
+
+/* 🌸 버튼 */
+.stButton > button {
+    background: #FF69B4;
+    color: white;
+    border-radius: 12px;
+    border: none;
+}
+
+/* 🌸 Selectbox 라벨 */
 .stSelectbox label {
-    color: #111111 !important;
+    color: #8A285B !important;
     font-weight: bold;
 }
 
-/* Radio */
+/* 🌸 Radio 라벨 */
 .stRadio label {
-    color: #111111 !important;
-    font-weight: bold;
-}
-
-/* Markdown */
-h1,h2,h3,h4,h5,h6{
-    color:#222222 !important;
+    color: #8A285B !important;
 }
 
 </style>
