@@ -20,34 +20,70 @@ st.set_page_config(
 
 st.markdown("""
 <style>
+
+/* 전체 배경 */
 .stApp {
-    background: linear-gradient(135deg, #fff1f8 0%, #eef7ff 45%, #f3fff1 100%);
+    background: linear-gradient(
+        135deg,
+        #fff4f8 0%,
+        #eef8ff 50%,
+        #f4fff2 100%
+    );
 }
+
+/* 전체 글씨 */
+html, body, p, div, span, label {
+    color: #111111 !important;
+}
+
+/* 제목 */
 .big-title {
-    font-size: 46px;
+    font-size: 48px;
     font-weight: 900;
     text-align: center;
-    color: #7c3aed;
+    color: #6d28d9 !important;
 }
+
+/* 부제목 */
 .sub-title {
+    font-size: 22px;
+    font-weight: bold;
     text-align: center;
-    font-size: 20px;
-    color: #222222;
+    color: #222222 !important;
 }
-.card {
-    background: white;
-    padding: 22px;
-    border-radius: 22px;
-    box-shadow: 0 6px 18px rgba(0,0,0,0.10);
-    margin-bottom: 15px;
+
+/* Metric 제목 */
+[data-testid="stMetricLabel"] {
+    color: #444444 !important;
+    font-weight: bold !important;
 }
+
+/* Metric 숫자 */
+[data-testid="stMetricValue"] {
+    color: #7c3aed !important;
+    font-size: 42px !important;
+    font-weight: 900 !important;
+}
+
+/* Selectbox */
+.stSelectbox label {
+    color: #111111 !important;
+    font-weight: bold;
+}
+
+/* Radio */
+.stRadio label {
+    color: #111111 !important;
+    font-weight: bold;
+}
+
+/* Markdown */
+h1,h2,h3,h4,h5,h6{
+    color:#222222 !important;
+}
+
 </style>
 """, unsafe_allow_html=True)
-
-st.markdown('<div class="big-title">🧠✨ 뇌세포 AI 선별 프로그램 ✨🧬</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title">이미지 업로드 + 군집 분석 + 분류 + 회귀 + UMAP 2D/3D + Spatial 시각화</div>', unsafe_allow_html=True)
-
-st.divider()
 
 
 REQUIRED_FILES = {
