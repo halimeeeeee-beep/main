@@ -1,413 +1,231 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import yfinance as yf
-import plotly.graph_objects as go
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.metrics import mean_absolute_error, r2_score
+import plotly.express as px
+from sklearn.cluster import KMeans, DBSCAN
+from sklearn.mixture import GaussianMixture
+from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.svm import SVC
+from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score, r2_score, mean_absolute_error, mean_squared_error, silhouette_score
+from sklearn.preprocessing import StandardScaler
 
-st.set_page_config(
-    page_title="AI 주식 분석 대시보드",
-    page_icon="📈",
-    layout="wide"
-)
+st.set_page_config(page_title="🧠 뇌세포 AI 선별 연구소", page_icon="🧬", layout="wide")
 
 st.markdown("""
 <style>
-.stApp {
-    background: linear-gradient(135deg, #020617 0%, #0f172a 45%, #111827 100%);
-    color: white;
-}
-.main-title {
-    font-size: 46px;
-    font-weight: 900;
-    text-align: center;
-    color: #38bdf8;
-}
-.sub-title {
-    text-align: center;
-    font-size: 18px;
-    color: #cbd5e1;
-    margin-bottom: 30px;
-}
-[data-testid="stMetricValue"] {
-    color: #facc15;
-}
+.stApp {background: linear-gradient(135deg, #fff5fb 0%, #eef7ff 45%, #f4fff1 100%);} 
+.big-title {font-size: 44px; font-weight: 900; text-align: center; color: #5b21b6;}
+.sub-title {font-size: 19px; text-align: center; color: #475569;}
+.card {padding: 18px; border-radius: 22px; background: rgba(255,255,255,0.78); box-shadow: 0 8px 26px rgba(80,80,120,0.12); border: 1px solid rgba(255,255,255,0.8);}
+.good {color:#059669; font-weight:800;}
+.warn {color:#ea580c; font-weight:800;}
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown('<div class="main-title">📈 AI 실시간 주식 분석 대시보드</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title">Yahoo Finance 실시간 데이터 + 차트 분석 기법 + AI 종가 예측</div>', unsafe_allow_html=True)
+st.markdown('<div class="big-title">🧠✨ 뇌세포 AI 선별 연구소 🧬🔬</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title">뇌세포 이미지와 유전자 발현 데이터를 활용해 군집 · 분류 · 회귀 알고리즘으로 세포를 탐색해요 🚀</div>', unsafe_allow_html=True)
+st.divider()
 
-stock_dict = {
-    "Apple 🍎": "AAPL",
-    "Microsoft 💻": "MSFT",
-    "NVIDIA 🤖": "NVDA",
-    "Amazon 📦": "AMZN",
-    "Google 🔍": "GOOGL",
-    "Meta 🌐": "META",
-    "Tesla 🚗": "TSLA",
-    "Netflix 🎬": "NFLX",
-    "AMD 🔥": "AMD",
-    "Palantir 🧠": "PLTR",
-    "Samsung Electronics 🇰🇷": "005930.KS",
-    "SK Hynix 💾": "000660.KS",
-    "Hyundai Motor 🚙": "005380.KS",
-    "NAVER 🟢": "035420.KS",
-    "Kakao 💬": "035720.KS"
-}
+@st.cache_data
+def load_data():
+    expr = pd.read_csv("expression_matrix_normalized.csv").rename(columns={"Unnamed: 0":"cell_id"})
+    meta = pd.read_csv("cell_metadata.csv").rename(columns={"Unnamed: 0":"cell_id"})
+    gene_meta = pd.read_csv("gene_metadata.csv").rename(columns={"Unnamed: 0":"gene"})
+    regs = pd.read_csv("ground_truth_regulators.csv").rename(columns={"Unnamed: 0":"cell_id"})
+    umap2 = pd.read_csv("embeddings_umap2d.csv").rename(columns={"Unnamed: 0":"cell_id"})
+    umap3 = pd.read_csv("embeddings_umap3d.csv").rename(columns={"Unnamed: 0":"cell_id"})
+    spatial = pd.read_csv("embeddings_spatial.csv").rename(columns={"Unnamed: 0":"cell_id"})
 
-st.sidebar.title("⚙️ 분석 설정")
+    data = meta.merge(umap2, on="cell_id", how="left")
+    data = data.merge(spatial, on="cell_id", how="left")
+    data = data.merge(regs, on="cell_id", how="left")
+    return expr, meta, gene_meta, regs, umap2, umap3, spatial, data
 
-selected_name = st.sidebar.selectbox("📌 종목 선택", list(stock_dict.keys()))
-ticker = stock_dict[selected_name]
-
-period = st.sidebar.selectbox(
-    "📅 데이터 기간",
-    ["1mo", "3mo", "6mo", "1y", "2y", "5y"],
-    index=3
-)
-
-interval = st.sidebar.selectbox(
-    "⏱️ 데이터 간격",
-    ["1d", "1h", "30m", "15m", "5m"],
-    index=0
-)
-
-chart_options = st.sidebar.multiselect(
-    "📊 차트 분석 기법 선택",
-    [
-        "🕯️ 캔들차트",
-        "📈 이동평균선",
-        "📦 볼린저 밴드",
-        "💪 RSI",
-        "📉 MACD",
-        "📊 거래량",
-        "⚡ 일별 수익률",
-        "🚀 누적 수익률"
-    ],
-    default=["🕯️ 캔들차트", "📈 이동평균선"]
-)
-
-st.sidebar.success(f"선택 종목 코드: {ticker}")
-
-@st.cache_data(ttl=300)
-def load_stock_data(ticker, period, interval):
-    df = yf.download(
-        ticker,
-        period=period,
-        interval=interval,
-        auto_adjust=False,
-        progress=False
-    )
-
-    if df.empty:
-        return pd.DataFrame()
-
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = df.columns.get_level_values(0)
-
-    df = df.reset_index()
-
-    if "Date" in df.columns:
-        df = df.rename(columns={"Date": "date"})
-    elif "Datetime" in df.columns:
-        df = df.rename(columns={"Datetime": "date"})
-
-    df = df.rename(columns={
-        "Open": "open",
-        "High": "high",
-        "Low": "low",
-        "Close": "close",
-        "Volume": "volume"
-    })
-
-    df = df[["date", "open", "high", "low", "close", "volume"]]
-    df = df.dropna()
-
-    for col in ["open", "high", "low", "close", "volume"]:
-        df[col] = pd.to_numeric(df[col], errors="coerce")
-
-    df = df.dropna()
-    return df
-
-def to_float(value):
-    if isinstance(value, pd.Series):
-        return float(value.iloc[0])
-    return float(value)
-
-df = load_stock_data(ticker, period, interval)
-
-if df.empty:
-    st.error("데이터를 불러오지 못했습니다. 기간 또는 간격을 바꿔보세요.")
+try:
+    expr, meta, gene_meta, regs, umap2, umap3, spatial, data = load_data()
+except FileNotFoundError:
+    st.error("CSV 파일들이 main.py와 같은 GitHub 폴더에 있어야 합니다. 파일명을 그대로 업로드해주세요! 📁")
     st.stop()
 
-df["MA5"] = df["close"].rolling(window=5).mean()
-df["MA20"] = df["close"].rolling(window=20).mean()
-df["MA60"] = df["close"].rolling(window=60).mean()
+cell_id_col = "cell_id"
+gene_cols = [c for c in expr.columns if c != cell_id_col]
 
-df["daily_return"] = df["close"].pct_change()
-df["volatility"] = df["daily_return"].rolling(window=20).std()
+with st.sidebar:
+    st.header("🎛️ 분석 설정")
+    uploaded_img = st.file_uploader("🖼️ 뇌세포 이미지 업로드", type=["png", "jpg", "jpeg"])
+    mode = st.radio("🤖 분석 방식 선택", ["🧩 군집 분석", "🏷️ 분류 분석", "📈 회귀 분석"])
+    max_genes = st.slider("🧬 사용할 유전자 수", 20, 300, 80, 10)
+    point_size = st.slider("🔎 점 크기", 4, 14, 7)
+    st.caption("유전자는 분산이 큰 순서로 자동 선택됩니다.")
 
-df["BB_Middle"] = df["close"].rolling(window=20).mean()
-df["BB_Std"] = df["close"].rolling(window=20).std()
-df["BB_Upper"] = df["BB_Middle"] + df["BB_Std"] * 2
-df["BB_Lower"] = df["BB_Middle"] - df["BB_Std"] * 2
-
-delta = df["close"].diff()
-gain = delta.where(delta > 0, 0)
-loss = -delta.where(delta < 0, 0)
-avg_gain = gain.rolling(window=14).mean()
-avg_loss = loss.rolling(window=14).mean()
-rs = avg_gain / avg_loss
-df["RSI"] = 100 - (100 / (1 + rs))
-
-ema12 = df["close"].ewm(span=12, adjust=False).mean()
-ema26 = df["close"].ewm(span=26, adjust=False).mean()
-df["MACD"] = ema12 - ema26
-df["Signal"] = df["MACD"].ewm(span=9, adjust=False).mean()
-df["MACD_Hist"] = df["MACD"] - df["Signal"]
-
-df["cumulative_return"] = (1 + df["daily_return"]).cumprod() - 1
-
-latest_close = to_float(df["close"].iloc[-1])
-first_close = to_float(df["close"].iloc[0])
-total_return = (latest_close - first_close) / first_close * 100
-avg_volume = to_float(df["volume"].mean())
-volatility = to_float(df["daily_return"].std() * 100)
-
-st.markdown(f"## 📌 {selected_name} 실시간 분석")
-st.caption("Yahoo Finance 데이터를 사용하며, 데이터는 5분마다 새로고침됩니다.")
-
-col1, col2, col3, col4 = st.columns(4)
-col1.metric("💰 최근 종가", f"{latest_close:,.2f}")
-col2.metric("📈 기간 수익률", f"{total_return:.2f}%")
-col3.metric("📦 평균 거래량", f"{avg_volume:,.0f}")
-col4.metric("⚡ 변동성", f"{volatility:.2f}%")
-
-st.divider()
-
-if (
-    "🕯️ 캔들차트" in chart_options
-    or "📈 이동평균선" in chart_options
-    or "📦 볼린저 밴드" in chart_options
-):
-    st.subheader("🕯️ 가격 차트")
-
-    price_fig = go.Figure()
-
-    if "🕯️ 캔들차트" in chart_options:
-        price_fig.add_trace(go.Candlestick(
-            x=df["date"],
-            open=df["open"],
-            high=df["high"],
-            low=df["low"],
-            close=df["close"],
-            name="캔들차트"
-        ))
+col_img, col_info = st.columns([1, 2])
+with col_img:
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.subheader("🖼️ 입력 이미지")
+    if uploaded_img:
+        st.image(uploaded_img, caption="업로드한 뇌세포 이미지", use_container_width=True)
+        st.success("이미지가 입력되었습니다! 아래 데이터 분석 결과와 함께 세포를 선별합니다. ✅")
     else:
-        price_fig.add_trace(go.Scatter(
-            x=df["date"],
-            y=df["close"],
-            mode="lines",
-            name="종가"
-        ))
+        st.info("이미지를 넣으면 앱이 더 예쁘게 보여요. 현재는 CSV 데이터 기반으로 분석합니다. 🌈")
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    if "📈 이동평균선" in chart_options:
-        price_fig.add_trace(go.Scatter(x=df["date"], y=df["MA5"], mode="lines", name="MA5"))
-        price_fig.add_trace(go.Scatter(x=df["date"], y=df["MA20"], mode="lines", name="MA20"))
-        price_fig.add_trace(go.Scatter(x=df["date"], y=df["MA60"], mode="lines", name="MA60"))
+with col_info:
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.subheader("📦 데이터 요약")
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("세포 수 🧫", f"{len(meta):,}")
+    m2.metric("유전자 수 🧬", f"{len(gene_cols):,}")
+    m3.metric("세포 유형 🏷️", meta["lineage"].nunique())
+    m4.metric("조절인자 점수 ⚡", regs.shape[1]-1)
+    st.write("세포 유형:", " · ".join(sorted(meta["lineage"].dropna().unique().astype(str))))
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    if "📦 볼린저 밴드" in chart_options:
-        price_fig.add_trace(go.Scatter(x=df["date"], y=df["BB_Upper"], mode="lines", name="볼린저 상단"))
-        price_fig.add_trace(go.Scatter(x=df["date"], y=df["BB_Middle"], mode="lines", name="볼린저 중심선"))
-        price_fig.add_trace(go.Scatter(x=df["date"], y=df["BB_Lower"], mode="lines", name="볼린저 하단"))
-
-    price_fig.update_layout(
-        template="plotly_dark",
-        height=650,
-        xaxis_title="날짜",
-        yaxis_title="가격",
-        xaxis_rangeslider_visible=False,
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(15,23,42,0.8)"
-    )
-
-    st.plotly_chart(price_fig, use_container_width=True)
-
-if "💪 RSI" in chart_options:
-    st.subheader("💪 RSI 분석")
-
-    rsi_fig = go.Figure()
-    rsi_fig.add_trace(go.Scatter(x=df["date"], y=df["RSI"], mode="lines", name="RSI"))
-    rsi_fig.add_hline(y=70, line_dash="dash", annotation_text="과매수")
-    rsi_fig.add_hline(y=30, line_dash="dash", annotation_text="과매도")
-
-    rsi_fig.update_layout(
-        template="plotly_dark",
-        height=350,
-        xaxis_title="날짜",
-        yaxis_title="RSI",
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(15,23,42,0.8)"
-    )
-
-    st.plotly_chart(rsi_fig, use_container_width=True)
-
-if "📉 MACD" in chart_options:
-    st.subheader("📉 MACD 분석")
-
-    macd_fig = go.Figure()
-    macd_fig.add_trace(go.Scatter(x=df["date"], y=df["MACD"], mode="lines", name="MACD"))
-    macd_fig.add_trace(go.Scatter(x=df["date"], y=df["Signal"], mode="lines", name="Signal"))
-    macd_fig.add_trace(go.Bar(x=df["date"], y=df["MACD_Hist"], name="Histogram"))
-
-    macd_fig.update_layout(
-        template="plotly_dark",
-        height=400,
-        xaxis_title="날짜",
-        yaxis_title="MACD",
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(15,23,42,0.8)"
-    )
-
-    st.plotly_chart(macd_fig, use_container_width=True)
-
-if "📊 거래량" in chart_options:
-    st.subheader("📊 거래량 분석")
-
-    volume_fig = go.Figure()
-    volume_fig.add_trace(go.Bar(x=df["date"], y=df["volume"], name="거래량"))
-
-    volume_fig.update_layout(
-        template="plotly_dark",
-        height=350,
-        xaxis_title="날짜",
-        yaxis_title="거래량",
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(15,23,42,0.8)"
-    )
-
-    st.plotly_chart(volume_fig, use_container_width=True)
-
-if "⚡ 일별 수익률" in chart_options:
-    st.subheader("⚡ 일별 수익률")
-
-    return_fig = go.Figure()
-    return_fig.add_trace(go.Scatter(
-        x=df["date"],
-        y=df["daily_return"] * 100,
-        mode="lines",
-        name="일별 수익률"
-    ))
-
-    return_fig.update_layout(
-        template="plotly_dark",
-        height=350,
-        xaxis_title="날짜",
-        yaxis_title="수익률(%)",
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(15,23,42,0.8)"
-    )
-
-    st.plotly_chart(return_fig, use_container_width=True)
-
-if "🚀 누적 수익률" in chart_options:
-    st.subheader("🚀 누적 수익률")
-
-    cumulative_fig = go.Figure()
-    cumulative_fig.add_trace(go.Scatter(
-        x=df["date"],
-        y=df["cumulative_return"] * 100,
-        mode="lines",
-        name="누적 수익률"
-    ))
-
-    cumulative_fig.update_layout(
-        template="plotly_dark",
-        height=350,
-        xaxis_title="날짜",
-        yaxis_title="누적 수익률(%)",
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(15,23,42,0.8)"
-    )
-
-    st.plotly_chart(cumulative_fig, use_container_width=True)
+# feature selection
+variances = expr[gene_cols].var().sort_values(ascending=False)
+selected_genes = variances.head(max_genes).index.tolist()
+X = expr[selected_genes].fillna(0)
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
 
 st.divider()
 
-st.subheader("🤖 AI 다음 종가 예측")
+if mode == "🧩 군집 분석":
+    st.header("🧩 군집 분석으로 비슷한 뇌세포끼리 묶기 🌌")
+    algo = st.selectbox("알고리즘 선택", ["K-Means", "DBSCAN", "Gaussian Mixture"])
 
-ai_df = df.copy()
-ai_df["prev_close"] = ai_df["close"].shift(1)
-ai_df["prev_volume"] = ai_df["volume"].shift(1)
-ai_df["return_1d"] = ai_df["close"].pct_change()
-ai_df["high_low_gap"] = ai_df["high"] - ai_df["low"]
-ai_df["open_close_gap"] = ai_df["open"] - ai_df["close"]
-ai_df["target"] = ai_df["close"].shift(-1)
-ai_df = ai_df.dropna()
+    if algo == "K-Means":
+        k = st.slider("군집 개수 K", 2, 10, 5)
+        model = KMeans(n_clusters=k, random_state=42, n_init=10)
+        labels = model.fit_predict(X_scaled)
+    elif algo == "DBSCAN":
+        eps = st.slider("eps: 가까운 정도", 0.5, 8.0, 3.0, 0.1)
+        min_samples = st.slider("min_samples", 3, 30, 8)
+        model = DBSCAN(eps=eps, min_samples=min_samples)
+        labels = model.fit_predict(X_scaled)
+    else:
+        k = st.slider("군집 개수", 2, 10, 5)
+        model = GaussianMixture(n_components=k, random_state=42)
+        labels = model.fit_predict(X_scaled)
 
-features = [
-    "open", "high", "low", "close", "volume",
-    "prev_close", "prev_volume", "return_1d",
-    "high_low_gap", "open_close_gap", "MA5", "MA20"
-]
+    result = data.copy()
+    result["AI_cluster"] = labels.astype(str)
 
-if len(ai_df) > 80:
-    X = ai_df[features]
-    y = ai_df["target"]
+    c1, c2 = st.columns([2, 1])
+    with c1:
+        fig = px.scatter(result, x="UMAP_1", y="UMAP_2", color="AI_cluster", hover_data=["cell_id", "lineage", "pseudotime"],
+                         title=f"🌈 {algo} 군집 결과", template="plotly_white")
+        fig.update_traces(marker=dict(size=point_size, opacity=0.82))
+        st.plotly_chart(fig, use_container_width=True)
+    with c2:
+        st.subheader("📊 군집별 세포 수")
+        st.dataframe(result["AI_cluster"].value_counts().reset_index().rename(columns={"AI_cluster":"cluster", "count":"cell_count"}), use_container_width=True)
+        valid = len(set(labels)) > 1 and -1 not in set(labels)
+        if valid:
+            st.metric("실루엣 점수 ✨", f"{silhouette_score(X_scaled, labels):.3f}")
+        else:
+            st.info("DBSCAN의 -1은 잡음 세포 후보입니다. 🧹")
 
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, shuffle=False
+    selected_cluster = st.selectbox("🔍 선별할 군집", sorted(result["AI_cluster"].unique()))
+    picked = result[result["AI_cluster"] == selected_cluster]
+    st.success(f"선택된 군집 {selected_cluster}의 뇌세포 후보: {len(picked):,}개 🧠")
+    st.dataframe(picked.head(200), use_container_width=True)
+
+elif mode == "🏷️ 분류 분석":
+    st.header("🏷️ 분류 분석으로 뇌세포 유형 예측하기 🎯")
+    algo = st.selectbox("알고리즘 선택", ["Random Forest", "KNN", "SVM"])
+    target = st.selectbox("예측할 세포 라벨", ["lineage", "batch", "branch_index"])
+
+    y = meta[target].astype(str)
+    test_size = st.slider("테스트 데이터 비율", 0.1, 0.4, 0.25, 0.05)
+    X_train, X_test, y_train, y_test, id_train, id_test = train_test_split(
+        X_scaled, y, meta[cell_id_col], test_size=test_size, random_state=42, stratify=y if y.nunique() < len(y)*0.5 else None
     )
 
-    model = RandomForestRegressor(
-        n_estimators=200,
-        random_state=42,
-        max_depth=8
-    )
+    if algo == "Random Forest":
+        n = st.slider("트리 개수", 50, 300, 150, 50)
+        clf = RandomForestClassifier(n_estimators=n, random_state=42)
+    elif algo == "KNN":
+        k = st.slider("이웃 수 K", 3, 25, 7, 2)
+        clf = KNeighborsClassifier(n_neighbors=k)
+    else:
+        c = st.slider("C: 분류 강도", 0.1, 10.0, 1.0, 0.1)
+        clf = SVC(C=c, probability=True, random_state=42)
 
-    model.fit(X_train, y_train)
-    pred = model.predict(X_test)
+    clf.fit(X_train, y_train)
+    pred = clf.predict(X_test)
+    acc = accuracy_score(y_test, pred)
 
-    mae = mean_absolute_error(y_test, pred)
-    r2 = r2_score(y_test, pred)
+    st.metric("분류 정확도 🎯", f"{acc:.3f}")
+    pred_df = pd.DataFrame({"cell_id": id_test.values, "actual": y_test.values, "predicted": pred})
+    pred_df = pred_df.merge(umap2, on="cell_id", how="left").merge(meta, on="cell_id", how="left", suffixes=("", "_meta"))
+    pred_df["correct"] = np.where(pred_df["actual"] == pred_df["predicted"], "✅ 정답", "❌ 오답")
 
-    latest_data = X.iloc[[-1]]
-    next_pred = float(model.predict(latest_data)[0])
+    fig = px.scatter(pred_df, x="UMAP_1", y="UMAP_2", color="predicted", symbol="correct",
+                     hover_data=["cell_id", "actual", "predicted"], title=f"🧠 {algo} 예측 결과", template="plotly_white")
+    fig.update_traces(marker=dict(size=point_size, opacity=0.85))
+    st.plotly_chart(fig, use_container_width=True)
 
-    col5, col6, col7 = st.columns(3)
-    col5.metric("🔮 AI 예측 다음 종가", f"{next_pred:,.2f}")
-    col6.metric("📏 MAE", f"{mae:.2f}")
-    col7.metric("✅ R² Score", f"{r2:.3f}")
-
-    result_df = pd.DataFrame({
-        "date": ai_df.loc[y_test.index, "date"],
-        "actual": y_test.values,
-        "predicted": pred
-    })
-
-    pred_fig = go.Figure()
-    pred_fig.add_trace(go.Scatter(x=result_df["date"], y=result_df["actual"], mode="lines", name="실제 종가"))
-    pred_fig.add_trace(go.Scatter(x=result_df["date"], y=result_df["predicted"], mode="lines", name="AI 예측 종가"))
-
-    pred_fig.update_layout(
-        template="plotly_dark",
-        height=450,
-        title="실제 종가 vs AI 예측 종가",
-        xaxis_title="날짜",
-        yaxis_title="종가",
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(15,23,42,0.8)"
-    )
-
-    st.plotly_chart(pred_fig, use_container_width=True)
+    wanted = st.selectbox("🔍 선별할 예측 세포 유형", sorted(pred_df["predicted"].unique()))
+    picked = pred_df[pred_df["predicted"] == wanted]
+    st.success(f"{wanted}로 예측된 뇌세포 후보: {len(picked):,}개 🧬")
+    st.dataframe(picked.head(200), use_container_width=True)
 
 else:
-    st.warning("데이터가 부족해서 AI 예측을 실행할 수 없습니다. 기간을 더 길게 선택하세요.")
+    st.header("📈 회귀 분석으로 세포 점수 예측하기 🚀")
+    algo = st.selectbox("알고리즘 선택", ["Random Forest Regressor", "Linear Regression"])
+    reg_targets = ["pseudotime", "cell_cycle_score", "stress_score", "branch_gate"] + [c for c in regs.columns if c != "cell_id"]
+    target = st.selectbox("예측할 연속값", reg_targets)
 
-st.info("⚠️ 이 프로그램은 교육용 데이터 분석 예제입니다. 실제 투자 판단이나 수익을 보장하지 않습니다.")
+    if target in meta.columns:
+        y = meta[target].astype(float)
+    else:
+        y = regs[target].astype(float)
 
-with st.expander("📋 최근 데이터 보기"):
-    st.dataframe(df.tail(20), use_container_width=True)
+    X_train, X_test, y_train, y_test, id_train, id_test = train_test_split(X_scaled, y, meta[cell_id_col], test_size=0.25, random_state=42)
+
+    if algo == "Random Forest Regressor":
+        n = st.slider("트리 개수", 50, 300, 150, 50)
+        reg = RandomForestRegressor(n_estimators=n, random_state=42)
+    else:
+        reg = LinearRegression()
+
+    reg.fit(X_train, y_train)
+    pred = reg.predict(X_test)
+    r2 = r2_score(y_test, pred)
+    rmse = mean_squared_error(y_test, pred) ** 0.5
+    mae = mean_absolute_error(y_test, pred)
+
+    a, b, c = st.columns(3)
+    a.metric("R² 설명력 📌", f"{r2:.3f}")
+    b.metric("RMSE 오차 📉", f"{rmse:.3f}")
+    c.metric("MAE 평균오차 🧮", f"{mae:.3f}")
+
+    pred_df = pd.DataFrame({"cell_id": id_test.values, "actual": y_test.values, "predicted": pred})
+    pred_df = pred_df.merge(umap2, on="cell_id", how="left").merge(meta, on="cell_id", how="left")
+
+    fig1 = px.scatter(pred_df, x="actual", y="predicted", color="lineage", hover_data=["cell_id"],
+                      title="🎯 실제값 vs 예측값", template="plotly_white", trendline="ols")
+    st.plotly_chart(fig1, use_container_width=True)
+
+    fig2 = px.scatter(pred_df, x="UMAP_1", y="UMAP_2", color="predicted", hover_data=["cell_id", "lineage"],
+                      title=f"🌡️ UMAP 위의 {target} 예측 점수", template="plotly_white", color_continuous_scale="Turbo")
+    fig2.update_traces(marker=dict(size=point_size, opacity=0.85))
+    st.plotly_chart(fig2, use_container_width=True)
+
+    threshold = st.slider("🔍 선별 기준: 예측 점수 이상", float(pred_df["predicted"].min()), float(pred_df["predicted"].max()), float(pred_df["predicted"].quantile(0.75)))
+    picked = pred_df[pred_df["predicted"] >= threshold].sort_values("predicted", ascending=False)
+    st.success(f"예측 점수가 높은 뇌세포 후보: {len(picked):,}개 🌟")
+    st.dataframe(picked.head(200), use_container_width=True)
+
+st.divider()
+st.subheader("🧬 유전자 메타데이터 탐색")
+module = st.multiselect("관심 유전자 모듈", sorted(gene_meta["module"].dropna().unique()), default=list(sorted(gene_meta["module"].dropna().unique()))[:2])
+show_gene = gene_meta[gene_meta["module"].isin(module)] if module else gene_meta
+fig_gene = px.scatter(show_gene, x="mean_expression", y="dispersions_norm", color="module", hover_data=["gene", "highly_variable"],
+                      title="🌈 유전자 평균 발현량과 변동성", template="plotly_white")
+st.plotly_chart(fig_gene, use_container_width=True)
+
+st.caption("⚠️ 참고: 업로드 이미지는 앱에서 표시용으로 사용됩니다. 실제 이미지 픽셀을 분석하는 딥러닝 모델은 별도 학습 데이터가 필요합니다. 현재 앱은 제공된 CSV의 유전자 발현·세포 메타데이터 기반으로 뇌세포 후보를 선별합니다.")
