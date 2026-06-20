@@ -1,192 +1,306 @@
 import streamlit as st
-import random
-from datetime import date
+import pandas as pd
+import numpy as np
+import yfinance as yf
+import plotly.graph_objects as go
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import mean_absolute_error, r2_score
+from sklearn.model_selection import train_test_split
 
 st.set_page_config(
-    page_title="MBTI 오늘의 운세",
-    page_icon="🔮",
+    page_title="AI 실시간 주식 분석 대시보드",
+    page_icon="📈",
     layout="wide"
 )
 
-st.markdown("""
-<style>
-.stApp {
-    background: linear-gradient(135deg, #ffe4f2, #e0f7ff, #fff7cc);
-}
-.title {
-    text-align: center;
-    font-size: 52px;
-    font-weight: 900;
-    color: #8e24aa;
-}
-.subtitle {
-    text-align: center;
-    font-size: 22px;
-    color: #444;
-}
-.card {
-    background: rgba(255,255,255,0.88);
-    padding: 26px;
-    border-radius: 28px;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.16);
-    margin: 18px 0;
-    border: 3px solid #f8bbd0;
-}
-.big {
-    font-size: 34px;
-    font-weight: 800;
-    color: #d81b60;
-}
-.text {
-    font-size: 19px;
-    color: #333;
-    line-height: 1.7;
-}
-.score {
-    font-size: 26px;
-    font-weight: bold;
-    color: #3949ab;
-}
-</style>
-""", unsafe_allow_html=True)
+st.title("📈 AI 실시간 주식 분석 대시보드")
+st.write("Yahoo Finance 데이터를 실시간으로 불러와 주가 차트와 AI 예측을 제공합니다.")
 
-st.markdown('<div class="title">🔮✨ MBTI 오늘의 운세 ✨🔮</div>', unsafe_allow_html=True)
-st.markdown('<div class="subtitle">MBTI와 출생년도를 입력하면 오늘의 행운 메시지를 알려드려요 🌈🍀💖</div>', unsafe_allow_html=True)
-
-st.write("")
-st.write("")
-
-mbti_list = [
-    "ISTJ", "ISFJ", "INFJ", "INTJ",
-    "ISTP", "ISFP", "INFP", "INTP",
-    "ESTP", "ESFP", "ENFP", "ENTP",
-    "ESTJ", "ESFJ", "ENFJ", "ENTJ"
-]
-
-fortune_messages = [
-    "오늘은 작은 도전이 큰 기회로 이어질 수 있어요 🚀",
-    "말 한마디가 좋은 인연을 만들어 줄 수 있는 날이에요 💬💕",
-    "조급해하지 않으면 원하는 결과에 가까워질 수 있어요 🌱",
-    "새로운 아이디어가 떠오르기 좋은 하루예요 💡✨",
-    "평소보다 자신감을 가지고 행동해도 좋은 날이에요 🔥",
-    "주변 사람의 도움을 기분 좋게 받아들이면 행운이 커져요 🤝🍀",
-    "정리정돈을 하면 마음도 함께 가벼워질 수 있어요 🧹🌈",
-    "오늘은 감정보다 차분한 판단이 행운을 불러와요 🧠⭐",
-    "웃는 얼굴이 좋은 기운을 끌어당기는 하루예요 😊💖",
-    "미뤄둔 일을 하나만 끝내도 만족감이 커질 거예요 ✅🎉"
-]
-
-lucky_items = [
-    "파란색 볼펜 🖊️", "딸기 우유 🍓", "하얀 운동화 👟",
-    "노란 메모지 📝", "초콜릿 🍫", "작은 거울 🪞",
-    "이어폰 🎧", "분홍색 소품 💗", "따뜻한 차 🍵", "책 한 권 📚"
-]
-
-lucky_colors = [
-    "핑크 💗", "하늘색 🩵", "노랑 💛", "보라 💜",
-    "민트 💚", "흰색 🤍", "주황 🧡", "빨강 ❤️"
-]
-
-advice_by_mbti = {
-    "I": "혼자만의 시간을 조금 가지면 에너지가 충전돼요 🌙",
-    "E": "사람들과 대화할수록 좋은 기운이 생겨요 🎉",
-    "S": "눈앞의 할 일을 차근차근 해내면 운이 좋아져요 📌",
-    "N": "상상력과 아이디어를 마음껏 펼쳐보세요 🌟",
-    "T": "논리적인 판단이 좋은 결과를 가져와요 🧠",
-    "F": "따뜻한 말과 배려가 행운을 불러와요 💕",
-    "J": "계획표를 세우면 하루가 더 편안해져요 📅",
-    "P": "즉흥적인 선택이 의외의 즐거움을 줄 수 있어요 🎈"
+# -----------------------------
+# 종목 목록
+# -----------------------------
+stock_dict = {
+    "Apple": "AAPL",
+    "Microsoft": "MSFT",
+    "NVIDIA": "NVDA",
+    "Amazon": "AMZN",
+    "Google": "GOOGL",
+    "Meta": "META",
+    "Tesla": "TSLA",
+    "Netflix": "NFLX",
+    "AMD": "AMD",
+    "Palantir": "PLTR",
+    "Samsung Electronics": "005930.KS",
+    "SK Hynix": "000660.KS",
+    "Hyundai Motor": "005380.KS",
+    "NAVER": "035420.KS",
+    "Kakao": "035720.KS"
 }
 
-col1, col2, col3 = st.columns([1, 2, 1])
+st.sidebar.header("⚙️ 분석 설정")
 
-with col2:
-    st.markdown('<div class="card">', unsafe_allow_html=True)
+selected_name = st.sidebar.selectbox("종목 선택", list(stock_dict.keys()))
+ticker = stock_dict[selected_name]
 
-    mbti = st.selectbox("🌟 MBTI를 선택하세요", mbti_list)
-    birth_year = st.number_input(
-        "🎂 출생년도를 입력하세요",
-        min_value=1950,
-        max_value=date.today().year,
-        value=2008,
-        step=1
+period = st.sidebar.selectbox(
+    "데이터 기간",
+    ["1mo", "3mo", "6mo", "1y", "2y", "5y"],
+    index=3
+)
+
+interval = st.sidebar.selectbox(
+    "데이터 간격",
+    ["1d", "1h", "30m", "15m", "5m"],
+    index=0
+)
+
+st.sidebar.info(f"선택 종목 코드: {ticker}")
+
+@st.cache_data(ttl=300)
+def load_stock_data(ticker, period, interval):
+    data = yf.download(
+        ticker,
+        period=period,
+        interval=interval,
+        auto_adjust=False,
+        progress=False
     )
 
-    st.markdown('</div>', unsafe_allow_html=True)
+    data = data.reset_index()
 
-    if st.button("🔮 오늘의 운세 보기 🔮"):
-        today = date.today()
+    if "Date" in data.columns:
+        data = data.rename(columns={"Date": "date"})
+    elif "Datetime" in data.columns:
+        data = data.rename(columns={"Datetime": "date"})
 
-        seed_value = f"{mbti}-{birth_year}-{today}"
-        random.seed(seed_value)
+    data = data.rename(columns={
+        "Open": "open",
+        "High": "high",
+        "Low": "low",
+        "Close": "close",
+        "Volume": "volume"
+    })
 
-        total_score = random.randint(70, 100)
-        love_score = random.randint(60, 100)
-        study_score = random.randint(60, 100)
-        money_score = random.randint(60, 100)
-        health_score = random.randint(60, 100)
+    data = data.dropna()
+    return data
 
-        fortune = random.choice(fortune_messages)
-        item = random.choice(lucky_items)
-        color = random.choice(lucky_colors)
+df = load_stock_data(ticker, period, interval)
 
-        mbti_advice = [
-            advice_by_mbti[mbti[0]],
-            advice_by_mbti[mbti[1]],
-            advice_by_mbti[mbti[2]],
-            advice_by_mbti[mbti[3]]
-        ]
+if df.empty:
+    st.error("데이터를 불러오지 못했습니다. 기간 또는 간격을 변경해 보세요.")
+    st.stop()
 
-        st.balloons()
+# -----------------------------
+# 기술적 지표 계산
+# -----------------------------
+df["MA5"] = df["close"].rolling(window=5).mean()
+df["MA20"] = df["close"].rolling(window=20).mean()
+df["MA60"] = df["close"].rolling(window=60).mean()
 
-        st.markdown(f"""
-        <div class="card">
-            <div class="big">🌈 {today} 오늘의 운세 🌈</div>
-            <p class="text">
-            ✨ <b>{mbti}</b> 유형, <b>{birth_year}년생</b>의 오늘 운세입니다! ✨<br><br>
-            🔮 {fortune}
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
+df["daily_return"] = df["close"].pct_change()
+df["volatility"] = df["daily_return"].rolling(window=20).std()
 
-        st.markdown(f"""
-        <div class="card">
-            <div class="big">🍀 종합 운세 점수</div>
-            <p class="score">⭐ {total_score}점 / 100점 ⭐</p>
-        </div>
-        """, unsafe_allow_html=True)
+# -----------------------------
+# 핵심 지표
+# -----------------------------
+st.subheader(f"📌 {selected_name} ({ticker}) 실시간 분석")
 
-        a, b, c, d = st.columns(4)
+latest_close = df["close"].iloc[-1]
+first_close = df["close"].iloc[0]
+total_return = (latest_close - first_close) / first_close * 100
+avg_volume = df["volume"].mean()
+volatility = df["daily_return"].std() * 100
 
-        with a:
-            st.metric("💕 애정운", f"{love_score}점")
-        with b:
-            st.metric("📚 공부운", f"{study_score}점")
-        with c:
-            st.metric("💰 금전운", f"{money_score}점")
-        with d:
-            st.metric("💪 건강운", f"{health_score}점")
+col1, col2, col3, col4 = st.columns(4)
+col1.metric("최근 종가", f"{latest_close:,.2f}")
+col2.metric("기간 수익률", f"{total_return:.2f}%")
+col3.metric("평균 거래량", f"{avg_volume:,.0f}")
+col4.metric("변동성", f"{volatility:.2f}%")
 
-        st.markdown(f"""
-        <div class="card">
-            <div class="big">🎁 오늘의 행운 아이템</div>
-            <p class="text">🍀 {item}</p>
-            <div class="big">🎨 오늘의 행운 색깔</div>
-            <p class="text">🌈 {color}</p>
-        </div>
-        """, unsafe_allow_html=True)
+st.caption("데이터는 Yahoo Finance에서 가져오며, 5분마다 자동 갱신됩니다.")
 
-        st.markdown("""
-        <div class="card">
-            <div class="big">💌 MBTI 맞춤 조언</div>
-        """, unsafe_allow_html=True)
+# -----------------------------
+# 캔들 차트
+# -----------------------------
+st.subheader("📊 주가 차트 + 이동평균선")
 
-        for advice in mbti_advice:
-            st.write(f"✨ {advice}")
+fig = go.Figure()
 
-        st.markdown("</div>", unsafe_allow_html=True)
+fig.add_trace(go.Candlestick(
+    x=df["date"],
+    open=df["open"],
+    high=df["high"],
+    low=df["low"],
+    close=df["close"],
+    name="캔들차트"
+))
 
-        st.success("🌟 오늘 하루도 반짝반짝 빛나는 하루 보내세요! ✨💖🌈")
+fig.add_trace(go.Scatter(
+    x=df["date"],
+    y=df["MA5"],
+    mode="lines",
+    name="MA5"
+))
 
-st.write("---")
-st.caption("🔮 이 앱은 재미와 진로·상담 활동용 예시입니다. 실제 운세와는 관련이 없어요 😊")
+fig.add_trace(go.Scatter(
+    x=df["date"],
+    y=df["MA20"],
+    mode="lines",
+    name="MA20"
+))
+
+fig.add_trace(go.Scatter(
+    x=df["date"],
+    y=df["MA60"],
+    mode="lines",
+    name="MA60"
+))
+
+fig.update_layout(
+    height=600,
+    xaxis_title="날짜",
+    yaxis_title="가격",
+    xaxis_rangeslider_visible=False
+)
+
+st.plotly_chart(fig, use_container_width=True)
+
+# -----------------------------
+# 거래량
+# -----------------------------
+st.subheader("📦 거래량 분석")
+
+volume_fig = go.Figure()
+volume_fig.add_trace(go.Bar(
+    x=df["date"],
+    y=df["volume"],
+    name="거래량"
+))
+
+volume_fig.update_layout(
+    height=350,
+    xaxis_title="날짜",
+    yaxis_title="거래량"
+)
+
+st.plotly_chart(volume_fig, use_container_width=True)
+
+# -----------------------------
+# 일별 수익률
+# -----------------------------
+st.subheader("📉 수익률 분석")
+
+return_fig = go.Figure()
+return_fig.add_trace(go.Scatter(
+    x=df["date"],
+    y=df["daily_return"] * 100,
+    mode="lines",
+    name="수익률"
+))
+
+return_fig.update_layout(
+    height=350,
+    xaxis_title="날짜",
+    yaxis_title="수익률(%)"
+)
+
+st.plotly_chart(return_fig, use_container_width=True)
+
+# -----------------------------
+# AI 예측
+# -----------------------------
+st.divider()
+st.subheader("🤖 AI 다음 데이터 종가 예측")
+
+ai_df = df.copy()
+
+ai_df["prev_close"] = ai_df["close"].shift(1)
+ai_df["prev_volume"] = ai_df["volume"].shift(1)
+ai_df["return_1d"] = ai_df["close"].pct_change()
+ai_df["high_low_gap"] = ai_df["high"] - ai_df["low"]
+ai_df["open_close_gap"] = ai_df["open"] - ai_df["close"]
+ai_df["target"] = ai_df["close"].shift(-1)
+
+ai_df = ai_df.dropna()
+
+features = [
+    "open",
+    "high",
+    "low",
+    "close",
+    "volume",
+    "prev_close",
+    "prev_volume",
+    "return_1d",
+    "high_low_gap",
+    "open_close_gap",
+    "MA5",
+    "MA20"
+]
+
+if len(ai_df) > 80:
+    X = ai_df[features]
+    y = ai_df["target"]
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, shuffle=False
+    )
+
+    model = RandomForestRegressor(
+        n_estimators=200,
+        random_state=42,
+        max_depth=8
+    )
+
+    model.fit(X_train, y_train)
+    pred = model.predict(X_test)
+
+    mae = mean_absolute_error(y_test, pred)
+    r2 = r2_score(y_test, pred)
+
+    latest_data = X.iloc[[-1]]
+    next_pred = model.predict(latest_data)[0]
+
+    col5, col6, col7 = st.columns(3)
+    col5.metric("AI 예측 다음 종가", f"{next_pred:,.2f}")
+    col6.metric("MAE", f"{mae:.2f}")
+    col7.metric("R² Score", f"{r2:.3f}")
+
+    result_df = pd.DataFrame({
+        "date": ai_df.loc[y_test.index, "date"],
+        "actual": y_test,
+        "predicted": pred
+    })
+
+    pred_fig = go.Figure()
+
+    pred_fig.add_trace(go.Scatter(
+        x=result_df["date"],
+        y=result_df["actual"],
+        mode="lines",
+        name="실제 종가"
+    ))
+
+    pred_fig.add_trace(go.Scatter(
+        x=result_df["date"],
+        y=result_df["predicted"],
+        mode="lines",
+        name="AI 예측 종가"
+    ))
+
+    pred_fig.update_layout(
+        height=450,
+        title="실제 종가 vs AI 예측 종가",
+        xaxis_title="날짜",
+        yaxis_title="종가"
+    )
+
+    st.plotly_chart(pred_fig, use_container_width=True)
+
+else:
+    st.warning("데이터가 부족해서 AI 예측을 실행할 수 없습니다. 기간을 더 길게 선택하세요.")
+
+st.info("이 프로그램은 교육용 데이터 분석 예제입니다. 실제 투자 판단에 사용하면 안 됩니다.")
+
+st.subheader("📋 최근 데이터")
+st.dataframe(df.tail(20), use_container_width=True)
