@@ -21,58 +21,81 @@ st.set_page_config(
 st.markdown("""
 <style>
 
-/* 🌸 앱 전체 배경 */
-.stApp {
-    background-color: #FFF0F5;
-}
-
-/* 🌸 메인 콘텐츠 영역 */
+/* 🌸 메인 배경 */
+.stApp,
 [data-testid="stAppViewContainer"] {
-    background-color: #FFF0F5;
-}
-
-/* 🌸 실제 내용이 들어가는 흰 영역 */
-.main .block-container {
-    background-color: #FFF0F5;
-    padding-top: 2rem;
-    padding-bottom: 2rem;
-    border-radius: 20px;
+    background: #FFF5F8;
 }
 
 /* 🌸 사이드바 */
 [data-testid="stSidebar"] {
-    background: #FFD6E7;
+    background: #FFE4EC;
 }
 
-/* 🌸 헤더 */
-[data-testid="stHeader"] {
-    background: transparent;
+/* 🌸 업로드 박스 */
+[data-testid="stFileUploader"] {
+    background: #DFF4FF !important;
+    border: 2px solid #A7D8FF !important;
+    border-radius: 18px;
+    padding: 15px;
+}
+
+/* 🌸 Selectbox 전체 */
+div[data-baseweb="select"] > div {
+    background-color: #DFF4FF !important;
+    border: 2px solid #9DD6FF !important;
+    border-radius: 14px !important;
+    color: #222222 !important;
+}
+
+/* 🌸 Selectbox 내부 글씨 */
+div[data-baseweb="select"] input {
+    color: #222222 !important;
+}
+
+/* 🌸 Dropdown 메뉴 */
+div[role="listbox"] {
+    background-color: #EAF8FF !important;
+}
+
+/* 🌸 버튼 */
+.stButton > button {
+    background: #7EC8FF !important;
+    color: white !important;
+    border-radius: 12px;
+    border: none;
+}
+
+/* 🌸 Metric 카드 */
+div[data-testid="stMetric"] {
+    background: white;
+    border-radius: 18px;
+    padding: 15px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+
+/* 🌸 Metric 숫자 */
+[data-testid="stMetricValue"] {
+    color: #FF5C9A !important;
+}
+
+/* 🌸 Metric 제목 */
+[data-testid="stMetricLabel"] {
+    color: #555 !important;
 }
 
 /* 🌸 제목 */
 .big-title {
-    font-size: 46px;
-    font-weight: 900;
-    text-align: center;
-    color: #D63384;
+    color: #FF4F87;
 }
 
 /* 🌸 부제목 */
 .sub-title {
-    text-align: center;
-    font-size: 22px;
-    color: #8A285B;
-    font-weight: bold;
-}
-
-/* 🌸 글씨 */
-html, body, p, div, span, label, h1, h2, h3, h4 {
-    color: #333333 !important;
+    color: #444;
 }
 
 </style>
 """, unsafe_allow_html=True)
-
 st.markdown('<div class="big-title">🧠✨ 뇌세포 AI 선별 프로그램 ✨🧬</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-title">이미지 업로드 + 군집 분석 + 분류 + 회귀 + UMAP 2D/3D + Spatial 시각화</div>', unsafe_allow_html=True)
 
