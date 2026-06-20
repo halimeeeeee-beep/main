@@ -541,48 +541,34 @@ if uploaded_image is not None:
 
     st.success("🔍 참고 이미지 업로드 완료!")
     st.info(
-        "🤖 이 앱은 업로드한 이미지를 직접 판별하는 딥러닝 모델은 아닙니다. "
-        "대신 업로드한 이미지를 참고 자료로 보여주고, CSV에 들어 있는 뇌세포 데이터를 바탕으로 AI 분석을 실행합니다."
+        "🤖 업로드한 이미지는 분석 화면의 참고 이미지로 표시됩니다. "
+        "실제 분석 결과는 CSV 파일에 들어 있는 뇌세포 데이터, UMAP 좌표, Spatial 좌표, 유전자/조절인자 정보를 기반으로 계산됩니다."
     )
 
-    st.markdown("### 📋 CSV 기반 AI 분석 결과 요약")
-
-    # 일반인이 이해하기 쉬운 대표 세포 그룹 자동 요약
     label_col_preview = best_label_column(data2d)
     if label_col_preview:
+        st.markdown("### 📋 CSV 기반 AI 분석 미리보기")
         easy_counts = data2d[label_col_preview].dropna().apply(friendly_cell_name).value_counts().head(5).reset_index()
-        easy_counts.columns = ["세포 이름", "데이터 안의 세포 수"]
-        easy_counts["쉬운 설명"] = easy_counts["세포 이름"].apply(friendly_cell_description)
-
-        st.write("🧠 현재 데이터에서 많이 관찰되는 대표 뇌세포 그룹입니다.")
+        easy_counts.columns = ["대표 세포 이름", "데이터 안의 세포 수"]
+        easy_counts["쉬운 설명"] = easy_counts["대표 세포 이름"].apply(friendly_cell_description)
         st.dataframe(easy_counts, use_container_width=True)
 
-        top_cell = easy_counts.iloc[0]["세포 이름"]
-        st.success(
-            f"🌟 현재 CSV 데이터 기준으로 가장 많이 보이는 세포 그룹은 **{top_cell}** 입니다. "
-            "왼쪽 메뉴에서 K-Means, 의사결정트리, UMAP, Spatial 분석을 선택하면 더 자세한 결과를 볼 수 있습니다."
-        )
-    else:
-        st.warning("세포 이름으로 해석할 수 있는 메타데이터 열을 찾지 못했습니다. 그래도 UMAP/Spatial 좌표 기반 분석은 가능합니다.")
-
-    st.markdown("""
-    #### 🧭 이 앱에서 확인할 수 있는 것
-    - 🎨 **K-Means 군집 분석**: 비슷한 세포끼리 자동으로 묶고, 쉬운 세포 이름으로 해석
-    - 🌳 **의사결정트리 분류**: 세포가 어떤 종류인지 예측하고 쉬운 설명 출력
-    - 📈 **회귀 분석**: 세포 발달 단계나 숫자형 특징을 예측
-    - 🌈 **UMAP 2D/3D**: 비슷한 세포들이 지도 위에서 어디에 모이는지 확인
-    - 📍 **Spatial 시각화**: 세포가 조직 안에서 어느 위치에 있는지 확인
-    - 🧬 **유전자/조절인자 탐색**: 세포 특징과 관련된 유전자 정보 확인
-    """)
+    st.success("✅ 이제 왼쪽 메뉴에서 원하는 분석 항목을 클릭하면 해당 분석 결과가 아래에 표시됩니다.")
 
 else:
-    st.warning("🖼️ 왼쪽 사이드바에서 뇌세포 이미지를 업로드하면 참고 이미지와 CSV 기반 AI 분석 요약이 표시됩니다.")
+    st.warning("🖼️ 먼저 왼쪽 사이드바에서 뇌세포 이미지를 업로드하세요.")
+    st.info(
+        "이미지를 업로드하면 참고 이미지가 표시되고, 그 다음 CSV 데이터를 기반으로 "
+        "K-Means 군집 분석, 의사결정트리 분류, 회귀 분석, UMAP 2D/3D, Spatial, 유전자/조절인자 탐색을 실행할 수 있습니다."
+    )
+    st.stop()
 
 st.markdown("<hr>", unsafe_allow_html=True)
 
 
 if analysis_mode == "🎨 K-Means 군집 분석":
     st.markdown('<div class="section-title">🎨 K-Means 군집 분석</div>', unsafe_allow_html=True)
+    st.info("🧠 비슷한 세포끼리 자동으로 묶고, 각 cluster가 어떤 쉬운 세포 그룹에 가까운지 알려줍니다.")
 
     if len(num2d) < 2:
         st.error("숫자형 좌표 열이 2개 이상 필요합니다.")
@@ -697,6 +683,7 @@ if analysis_mode == "🎨 K-Means 군집 분석":
 
 elif analysis_mode == "🌳 의사결정트리 분류":
     st.markdown('<div class="section-title">🌳 의사결정트리 분류</div>', unsafe_allow_html=True)
+    st.info("🌳 CSV 데이터의 세포 라벨을 학습해서, 세포가 어떤 종류인지 쉬운 이름으로 예측합니다.")
 
     if len(cat_cols) == 0:
         st.warning("분류에 사용할 문자형 라벨 열이 없습니다.")
@@ -787,6 +774,7 @@ elif analysis_mode == "🌳 의사결정트리 분류":
 
 elif analysis_mode == "📈 회귀 분석":
     st.markdown('<div class="section-title">📈 회귀 분석</div>', unsafe_allow_html=True)
+    st.info("📈 세포의 숫자형 특징을 이용해 다른 숫자형 값을 예측하고, 예측이 잘 맞는지 쉽게 설명합니다.")
 
     all_numeric = numeric_columns(data2d)
 
@@ -856,6 +844,7 @@ elif analysis_mode == "📈 회귀 분석":
 
 elif analysis_mode == "🌈 UMAP 2D 시각화":
     st.markdown('<div class="section-title">🌈 UMAP 2D 시각화</div>', unsafe_allow_html=True)
+    st.info("🌈 세포들을 2차원 지도에 펼쳐서, 비슷한 세포들이 어디에 모이는지 보여줍니다.")
     st.info("💡 " + umap_easy_explanation("2D"))
     st.caption("가까운 점끼리는 비슷한 세포입니다. 색이 다르게 나뉘면 서로 다른 세포 그룹으로 볼 수 있습니다.")
 
@@ -919,6 +908,7 @@ elif analysis_mode == "🌈 UMAP 2D 시각화":
 
 elif analysis_mode == "🧊 UMAP 3D 시각화":
     st.markdown('<div class="section-title">🧊 UMAP 3D 시각화</div>', unsafe_allow_html=True)
+    st.info("🧊 세포들의 관계를 3차원 공간에서 입체적으로 보여줍니다.")
     st.info("💡 " + umap_easy_explanation("3D"))
 
     if len(num3d) < 3:
@@ -970,6 +960,7 @@ elif analysis_mode == "🧊 UMAP 3D 시각화":
 
 elif analysis_mode == "📍 Spatial 시각화":
     st.markdown('<div class="section-title">📍 Spatial 시각화</div>', unsafe_allow_html=True)
+    st.info("📍 세포가 조직 안에서 어느 위치에 있는지 지도로 보여줍니다.")
     st.info("💡 " + spatial_easy_explanation())
 
     if len(numsp) < 2:
@@ -1009,6 +1000,7 @@ elif analysis_mode == "📍 Spatial 시각화":
 
 elif analysis_mode == "🧬 유전자/조절인자 탐색":
     st.markdown('<div class="section-title">🧬 유전자 / 조절인자 탐색</div>', unsafe_allow_html=True)
+    st.info("🧬 유전자와 조절인자가 세포 특징과 발달 방향에 어떤 단서가 되는지 쉽게 확인합니다.")
 
     tab1, tab2 = st.tabs(["🧬 Gene Metadata", "🎯 Regulators"])
 
