@@ -295,6 +295,74 @@ def numeric_columns(df):
 def categorical_columns(df):
     return df.select_dtypes(exclude=[np.number]).columns.tolist()
 
+def friendly_cell_name(value):
+    """데이터 안의 영어 세포 라벨을 일반인이 이해하기 쉬운 한국어 이름으로 변환"""
+    if pd.isna(value):
+        return "알 수 없음"
+
+    raw = str(value)
+    key = raw.strip().replace(" ", "_")
+
+    name_map = {
+        "NPC": "신경전구세포",
+        "Neural_Progenitor": "신경전구세포",
+        "Excitatory_Neuron": "흥분성 뉴런",
+        "Inhibitory_Neuron": "억제성 뉴런",
+        "Neuron": "뉴런",
+        "Astrocyte": "별아교세포",
+        "Oligodendrocyte": "희소돌기아교세포",
+        "OPC": "희소돌기아교 전구세포",
+        "Microglia": "미세아교세포",
+    }
+    return name_map.get(key, raw)
+
+
+def friendly_cell_description(value):
+    """세포 이름에 대한 쉬운 설명"""
+    name = friendly_cell_name(value)
+
+    desc_map = {
+        "신경전구세포": "아직 완전히 성숙하지 않았고, 여러 종류의 뇌세포로 발달할 수 있는 준비 단계 세포입니다.",
+        "흥분성 뉴런": "다른 세포에 신호를 보내 뇌 활동을 활발하게 만드는 신경세포입니다.",
+        "억제성 뉴런": "신호가 과도하게 퍼지지 않도록 조절하는 브레이크 역할의 신경세포입니다.",
+        "뉴런": "정보를 전달하고 처리하는 대표적인 뇌 신경세포입니다.",
+        "별아교세포": "뉴런을 보호하고 영양 공급, 주변 환경 조절을 돕는 지원 세포입니다.",
+        "희소돌기아교세포": "신경섬유를 감싸 신호가 빠르게 이동하도록 돕는 세포입니다.",
+        "희소돌기아교 전구세포": "희소돌기아교세포로 발달할 수 있는 미성숙 단계의 세포입니다.",
+        "미세아교세포": "뇌 안의 면역세포처럼 손상이나 염증을 감시하고 청소하는 세포입니다.",
+    }
+    return desc_map.get(name, "데이터의 메타데이터 라벨을 바탕으로 추정된 세포 그룹입니다.")
+
+
+def broad_cell_group(value):
+    """더 큰 범주의 세포 그룹명"""
+    name = friendly_cell_name(value)
+    if name in ["흥분성 뉴런", "억제성 뉴런", "뉴런"]:
+        return "신경세포 그룹"
+    if name in ["별아교세포", "희소돌기아교세포", "미세아교세포"]:
+        return "아교세포 그룹"
+    if name in ["신경전구세포", "희소돌기아교 전구세포"]:
+        return "전구세포 그룹"
+    return "기타 세포 그룹"
+
+
+def best_label_column(df):
+    """세포 유형 해석에 가장 적합한 열 자동 선택"""
+    preferred = ["lineage", "cell_type", "celltype", "type", "label", "annotation", "class"]
+    lower_map = {c.lower(): c for c in df.columns}
+    for p in preferred:
+        if p.lower() in lower_map:
+            return lower_map[p.lower()]
+
+    cats = categorical_columns(df)
+    if len(cats) > 0:
+        # ID처럼 종류가 너무 많은 열은 피하기
+        reasonable = [c for c in cats if df[c].nunique() <= 30]
+        if reasonable:
+            return reasonable[0]
+        return cats[0]
+    return None
+
 
 def style_plotly(fig):
     fig.update_layout(
@@ -429,14 +497,21 @@ if analysis_mode == "🎨 K-Means 군집 분석":
     with c3:
         k = st.selectbox("군집 개수 K 선택", list(range(2, 11)), index=2)
 
+    label_col_auto = best_label_column(data2d)
     label_candidates = categorical_columns(data2d)
     label_candidates = [c for c in label_candidates if c not in [x_col, y_col]]
+
+    if label_col_auto and label_col_auto in label_candidates:
+        default_idx = label_candidates.index(label_col_auto)
+    else:
+        default_idx = 0 if len(label_candidates) > 0 else None
 
     if len(label_candidates) > 0:
         label_col = st.selectbox(
             "🧠 군집 결과를 어떤 세포 정보로 해석할까요?",
             label_candidates,
-            help="K-Means는 숫자 좌표를 보고 자동으로 묶습니다. 여기서 선택한 메타데이터 열로 각 군집이 어떤 세포 유형에 가까운지 해석합니다."
+            index=default_idx,
+            help="추천: lineage. K-Means는 좌표상 가까운 세포를 묶고, 선택한 메타데이터 열을 이용해 각 군집을 쉬운 세포 이름으로 해석합니다."
         )
     else:
         label_col = None
@@ -457,7 +532,7 @@ if analysis_mode == "🎨 K-Means 군집 분석":
             plot_df.groupby("cluster")[label_col]
             .agg(lambda s: s.value_counts().index[0])
             .reset_index()
-            .rename(columns={label_col: "대표 세포 유형"})
+            .rename(columns={label_col: "대표 원본 라벨"})
         )
 
         counts = plot_df.groupby("cluster").size().reset_index(name="세포 수")
@@ -469,9 +544,18 @@ if analysis_mode == "🎨 K-Means 군집 분석":
         )
 
         cluster_result = counts.merge(summary, on="cluster").merge(purity, on="cluster")
-        cluster_name_map = dict(zip(cluster_result["cluster"], cluster_result["대표 세포 유형"]))
-        plot_df["군집 해석"] = plot_df["cluster"].map(cluster_name_map)
-        color_target = "군집 해석"
+        cluster_result["예측 세포 이름"] = cluster_result["대표 원본 라벨"].apply(friendly_cell_name)
+        cluster_result["쉬운 세포 그룹"] = cluster_result["대표 원본 라벨"].apply(broad_cell_group)
+        cluster_result["쉬운 설명"] = cluster_result["대표 원본 라벨"].apply(friendly_cell_description)
+
+        cluster_name_map = dict(zip(cluster_result["cluster"], cluster_result["예측 세포 이름"]))
+        cluster_group_map = dict(zip(cluster_result["cluster"], cluster_result["쉬운 세포 그룹"]))
+        cluster_desc_map = dict(zip(cluster_result["cluster"], cluster_result["쉬운 설명"]))
+
+        plot_df["예측 세포 이름"] = plot_df["cluster"].map(cluster_name_map)
+        plot_df["쉬운 세포 그룹"] = plot_df["cluster"].map(cluster_group_map)
+        plot_df["쉬운 설명"] = plot_df["cluster"].map(cluster_desc_map)
+        color_target = "예측 세포 이름"
     else:
         cluster_result = plot_df["cluster"].value_counts().sort_index().reset_index()
         cluster_result.columns = ["cluster", "세포 수"]
@@ -482,7 +566,7 @@ if analysis_mode == "🎨 K-Means 군집 분석":
         x=x_col,
         y=y_col,
         color=color_target,
-        hover_data=["cluster"] + ([label_col, "군집 해석"] if label_col else []),
+        hover_data=["cluster"] + ([label_col, "예측 세포 이름", "쉬운 세포 그룹"] if label_col else []),
         title=f"🎨 K-Means 군집 결과: K={k}",
         template="plotly_white",
         opacity=0.82
@@ -490,16 +574,17 @@ if analysis_mode == "🎨 K-Means 군집 분석":
     fig = style_plotly(fig)
     st.plotly_chart(fig, use_container_width=True)
 
-    st.markdown("### 🧠 군집 결과 해석")
+    st.markdown("### 🧠 군집 결과를 쉬운 이름으로 해석")
     st.info(
-        "K-Means는 정답 라벨을 보고 분류하는 것이 아니라, 선택한 X/Y 좌표에서 가까운 세포끼리 자동으로 묶습니다. "
-        "아래 표의 '대표 세포 유형'은 각 군집 안에서 가장 많이 등장한 메타데이터 라벨입니다."
+        "K-Means는 먼저 좌표상 가까운 세포끼리 자동으로 묶습니다. "
+        "그다음 각 cluster 안에서 가장 많이 등장한 세포 라벨을 찾아서 "
+        "일반인이 이해하기 쉬운 이름으로 바꿔 표시합니다."
     )
     st.dataframe(cluster_result, use_container_width=True)
 
     if label_col:
         st.markdown("### 🔎 세포별 군집 분류 결과")
-        output_cols = [x_col, y_col, "cluster", "군집 해석", label_col]
+        output_cols = [x_col, y_col, "cluster", "예측 세포 이름", "쉬운 세포 그룹", "쉬운 설명", label_col]
         st.dataframe(plot_df[output_cols].head(200), use_container_width=True)
 
         csv = plot_df[output_cols].to_csv(index=False).encode("utf-8-sig")
@@ -557,11 +642,32 @@ elif analysis_mode == "🌳 의사결정트리 분류":
     st.metric("🌟 분류 정확도", f"{acc:.3f}")
 
     result_df = X_test.copy()
-    result_df["실제 라벨"] = le.inverse_transform(y_test)
-    result_df["예측 라벨"] = le.inverse_transform(pred)
+    result_df["실제 원본 라벨"] = le.inverse_transform(y_test)
+    result_df["예측 원본 라벨"] = le.inverse_transform(pred)
+    result_df["실제 세포 이름"] = result_df["실제 원본 라벨"].apply(friendly_cell_name)
+    result_df["예측 세포 이름"] = result_df["예측 원본 라벨"].apply(friendly_cell_name)
+    result_df["예측 세포 그룹"] = result_df["예측 원본 라벨"].apply(broad_cell_group)
+    result_df["쉬운 설명"] = result_df["예측 원본 라벨"].apply(friendly_cell_description)
 
-    st.markdown("### 🧠 세포 분류 결과")
-    st.dataframe(result_df.head(50), use_container_width=True)
+    st.markdown("### 🧠 의사결정트리 세포 예측 결과")
+    st.info(
+        "의사결정트리는 이미 알려진 세포 라벨을 학습한 뒤, 새로운 세포가 어떤 세포인지 예측합니다. "
+        "아래 표에서는 영어 라벨 대신 일반인이 이해하기 쉬운 세포 이름과 설명을 함께 표시합니다."
+    )
+    show_cols = ["실제 세포 이름", "예측 세포 이름", "예측 세포 그룹", "쉬운 설명", "실제 원본 라벨", "예측 원본 라벨"] + selected_features
+    st.dataframe(result_df[show_cols].head(80), use_container_width=True)
+
+    pred_summary = (
+        result_df["예측 세포 이름"]
+        .value_counts()
+        .reset_index()
+    )
+    pred_summary.columns = ["예측 세포 이름", "예측 개수"]
+    pred_summary["세포 그룹"] = pred_summary["예측 세포 이름"].apply(broad_cell_group)
+    pred_summary["쉬운 설명"] = pred_summary["예측 세포 이름"].apply(friendly_cell_description)
+
+    st.markdown("### 📊 예측된 세포 종류 요약")
+    st.dataframe(pred_summary, use_container_width=True)
 
     importance = pd.DataFrame({
         "feature": selected_features,
