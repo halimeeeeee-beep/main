@@ -20,86 +20,34 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-
-/* 🌸 전체 배경 */
-.stApp,
-[data-testid="stAppViewContainer"] {
-    background: #FFE4EC;
+.stApp {
+    background: linear-gradient(135deg, #fff1f8 0%, #eef7ff 45%, #f3fff1 100%);
 }
-
-/* 🌸 헤더 투명 */
-[data-testid="stHeader"] {
-    background: rgba(255,255,255,0);
-}
-
-/* 🌸 사이드바 */
-[data-testid="stSidebar"] {
-    background: #FFD6E7;
-}
-
-/* 🌸 제목 */
 .big-title {
-    font-size: 48px;
+    font-size: 46px;
     font-weight: 900;
     text-align: center;
-    color: #D63384;
+    color: #5b21b6;
 }
-
-/* 🌸 부제목 */
 .sub-title {
     text-align: center;
-    font-size: 22px;
-    font-weight: bold;
-    color: #8A285B;
+    font-size: 20px;
+    color: #374151;
 }
-
-/* 🌸 일반 글씨 */
-html, body, p, div, span, label, h1, h2, h3, h4, h5 {
-    color: #333333 !important;
+.card {
+    background: white;
+    padding: 22px;
+    border-radius: 22px;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.10);
+    margin-bottom: 15px;
 }
-
-/* 🌸 Metric 제목 */
-[data-testid="stMetricLabel"] {
-    color: #8A285B !important;
-    font-weight: bold;
-}
-
-/* 🌸 Metric 숫자 */
-[data-testid="stMetricValue"] {
-    color: #D63384 !important;
-    font-weight: 900;
-    font-size: 42px;
-}
-
-/* 🌸 Metric 카드 */
-div[data-testid="stMetric"] {
-    background: rgba(255,255,255,0.9);
-    padding: 15px;
-    border-radius: 18px;
-    box-shadow: 0 3px 10px rgba(0,0,0,0.08);
-}
-
-/* 🌸 버튼 */
-.stButton > button {
-    background: #FF69B4;
-    color: white;
-    border-radius: 12px;
-    border: none;
-}
-
-/* 🌸 Selectbox 라벨 */
-.stSelectbox label {
-    color: #8A285B !important;
-    font-weight: bold;
-}
-
-/* 🌸 Radio 라벨 */
-.stRadio label {
-    color: #8A285B !important;
-}
-
 </style>
 """, unsafe_allow_html=True)
+
+st.markdown('<div class="big-title">🧠✨ 뇌세포 AI 선별 프로그램 ✨🧬</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title">이미지 업로드 + 군집 분석 + 분류 + 회귀 + UMAP 2D/3D + Spatial 시각화</div>', unsafe_allow_html=True)
+
+st.divider()
 
 
 REQUIRED_FILES = {
