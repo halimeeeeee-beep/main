@@ -20,27 +20,56 @@ st.set_page_config(
 
 st.markdown("""
 <style>
+
+/* 🌸 앱 전체 배경 */
 .stApp {
-    background: linear-gradient(135deg, #fff1f8 0%, #eef7ff 45%, #f3fff1 100%);
+    background-color: #FFF0F5;
 }
+
+/* 🌸 메인 콘텐츠 영역 */
+[data-testid="stAppViewContainer"] {
+    background-color: #FFF0F5;
+}
+
+/* 🌸 실제 내용이 들어가는 흰 영역 */
+.main .block-container {
+    background-color: #FFF0F5;
+    padding-top: 2rem;
+    padding-bottom: 2rem;
+    border-radius: 20px;
+}
+
+/* 🌸 사이드바 */
+[data-testid="stSidebar"] {
+    background: #FFD6E7;
+}
+
+/* 🌸 헤더 */
+[data-testid="stHeader"] {
+    background: transparent;
+}
+
+/* 🌸 제목 */
 .big-title {
     font-size: 46px;
     font-weight: 900;
     text-align: center;
-    color: #5b21b6;
+    color: #D63384;
 }
+
+/* 🌸 부제목 */
 .sub-title {
     text-align: center;
-    font-size: 20px;
-    color: #374151;
+    font-size: 22px;
+    color: #8A285B;
+    font-weight: bold;
 }
-.card {
-    background: white;
-    padding: 22px;
-    border-radius: 22px;
-    box-shadow: 0 6px 18px rgba(0,0,0,0.10);
-    margin-bottom: 15px;
+
+/* 🌸 글씨 */
+html, body, p, div, span, label, h1, h2, h3, h4 {
+    color: #333333 !important;
 }
+
 </style>
 """, unsafe_allow_html=True)
 
