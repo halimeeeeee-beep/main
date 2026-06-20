@@ -310,6 +310,64 @@ def style_plotly(fig):
     return fig
 
 
+def style_umap2d_publication(fig, x_col, y_col):
+    """논문 그림처럼 보이는 UMAP 2D 스타일"""
+    fig.update_traces(
+        marker=dict(
+            size=5,
+            opacity=0.72,
+            line=dict(width=0)
+        )
+    )
+    fig.update_layout(
+        title=dict(
+            text="2D Projection: embeddings_umap2d.csv",
+            x=0.02,
+            xanchor="left",
+            font=dict(size=28, color="#111111")
+        ),
+        paper_bgcolor="white",
+        plot_bgcolor="white",
+        font=dict(color="#111111", size=16),
+        legend=dict(
+            title="",
+            bgcolor="rgba(255,255,255,0.85)",
+            bordercolor="#DDDDDD",
+            borderwidth=1,
+            font=dict(size=13, color="#111111")
+        ),
+        margin=dict(l=70, r=40, t=80, b=70),
+        height=720
+    )
+    fig.update_xaxes(
+        title_text="UMAP_1",
+        title_font=dict(size=24, color="#111111"),
+        tickfont=dict(size=16, color="#111111"),
+        showgrid=True,
+        gridcolor="#DDDDDD",
+        zeroline=False,
+        showline=True,
+        linewidth=2,
+        linecolor="#111111",
+        mirror=True
+    )
+    fig.update_yaxes(
+        title_text="UMAP_2",
+        title_font=dict(size=24, color="#111111"),
+        tickfont=dict(size=16, color="#111111"),
+        showgrid=True,
+        gridcolor="#DDDDDD",
+        zeroline=False,
+        showline=True,
+        linewidth=2,
+        linecolor="#111111",
+        mirror=True,
+        scaleanchor="x",
+        scaleratio=1
+    )
+    return fig
+
+
 data2d = merge_by_cell(cell_metadata, umap2d)
 data3d = merge_by_cell(cell_metadata, umap3d)
 datasp = merge_by_cell(cell_metadata, spatial)
@@ -525,6 +583,7 @@ elif analysis_mode == "📈 회귀 분석":
 
 elif analysis_mode == "🌈 UMAP 2D 시각화":
     st.markdown('<div class="section-title">🌈 UMAP 2D 시각화</div>', unsafe_allow_html=True)
+    st.info("💡 논문 그림처럼 보이도록 흰 그래프 배경, 작은 점, 진한 축, UMAP_1 / UMAP_2 축 이름을 적용했습니다.")
 
     if len(num2d) < 2:
         st.error("UMAP 2D 좌표 열이 부족합니다.")
@@ -532,26 +591,45 @@ elif analysis_mode == "🌈 UMAP 2D 시각화":
 
     c1, c2, c3 = st.columns(3)
     with c1:
-        x_col = st.selectbox("UMAP X축", num2d, index=0)
+        x_col = st.selectbox("UMAP_1로 사용할 열", num2d, index=0)
     with c2:
-        y_col = st.selectbox("UMAP Y축", num2d, index=1)
+        y_col = st.selectbox("UMAP_2로 사용할 열", num2d, index=1)
     with c3:
-        color_options = ["없음"] + list(data2d.columns)
+        color_options = ["K-Means 자동 군집"] + list(data2d.columns)
         color_col = st.selectbox("색상 기준", color_options)
 
+    plot_df = data2d[[x_col, y_col]].copy()
+
+    if color_col == "K-Means 자동 군집":
+        k_umap = st.slider("🎨 UMAP 색상 군집 수", 2, 12, 8)
+        X_umap = plot_df[[x_col, y_col]].dropna()
+        km = KMeans(n_clusters=k_umap, random_state=42, n_init=10)
+        cluster_labels = km.fit_predict(X_umap)
+
+        plot_df = X_umap.copy()
+        plot_df["cluster"] = cluster_labels.astype(str)
+        color_target = "cluster"
+    else:
+        temp = data2d[[x_col, y_col, color_col]].dropna()
+        plot_df = temp.copy()
+        color_target = color_col
+
     fig = px.scatter(
-        data2d,
+        plot_df,
         x=x_col,
         y=y_col,
-        color=None if color_col == "없음" else color_col,
-        title="🌈 UMAP 2D 뇌세포 지도",
+        color=color_target,
+        title="2D Projection: embeddings_umap2d.csv",
         template="plotly_white",
-        opacity=0.8
+        opacity=0.72,
+        color_discrete_sequence=px.colors.qualitative.Set2
     )
-    fig = style_plotly(fig)
+
+    fig = style_umap2d_publication(fig, x_col, y_col)
     st.plotly_chart(fig, use_container_width=True)
 
-    st.dataframe(data2d.head(100), use_container_width=True)
+    st.markdown("### 🧬 UMAP 2D 데이터 미리보기")
+    st.dataframe(plot_df.head(100), use_container_width=True)
 
 
 elif analysis_mode == "🧊 UMAP 3D 시각화":
