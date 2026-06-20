@@ -398,6 +398,38 @@ def get_candidate_label(df, idx):
     return None, "알 수 없음", "알 수 없음", "세포 라벨 열을 찾지 못했습니다.", "알 수 없음"
 
 
+def show_learning_box(title, concept, how_to_read, caution):
+    """학생용 설명 박스"""
+    st.markdown(f"""
+    <div class="result-card">
+    <h3>{title}</h3>
+    <p><b>개념:</b> {concept}</p>
+    <p><b>결과 읽는 법:</b> {how_to_read}</p>
+    <p><b>주의할 점:</b> {caution}</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+
+def explain_current_prediction(predicted_name, predicted_group, predicted_desc, confidence):
+    st.markdown("### 🧠 현재 업로드 이미지에 대한 전체 해석")
+    st.markdown(f"""
+    <div class="result-card">
+    <h3>🔮 예상 결과: {predicted_name}</h3>
+    <p><b>큰 분류:</b> {predicted_group}</p>
+    <p><b>쉬운 설명:</b> {predicted_desc}</p>
+    <p><b>참고 신뢰도:</b> {confidence:.1f}%</p>
+    <p>
+    이 결과는 업로드한 이미지에서 추출한 <b>밝기, 대비, RGB 색상 평균</b>을
+    CSV 데이터 안의 숫자형 세포 특징과 비교해서 가장 가까운 참고 세포를 찾은 것입니다.
+    </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+
+def make_student_summary_table(rows):
+    return pd.DataFrame(rows, columns=["항목", "학생용 설명"])
+
+
 data2d = merge_by_cell(cell_metadata, umap2d)
 data3d = merge_by_cell(cell_metadata, umap3d)
 datasp = merge_by_cell(cell_metadata, spatial)
@@ -461,9 +493,31 @@ with right:
     st.caption("주의: 이 앱은 실제 현미경 이미지를 학습한 딥러닝 모델이 아니라, 업로드 이미지와 CSV 특징값을 연결한 교육용 참고 예측입니다.")
     st.markdown('</div>', unsafe_allow_html=True)
 
+explain_current_prediction(predicted_name, predicted_group, predicted_desc, candidate_confidence)
+
+st.markdown("### 📚 학생들이 먼저 이해해야 할 핵심")
+overview_df = make_student_summary_table([
+    ["이미지 업로드", "현미경 이미지를 넣으면 앱이 밝기, 대비, 빨강·초록·파랑 평균값을 계산합니다."],
+    ["CSV 기반 예측", "이미지를 직접 딥러닝으로 판별하는 것이 아니라, 이미지 특징과 CSV 속성이 가장 비슷한 세포를 찾습니다."],
+    ["K-Means", "정답 없이 비슷한 세포끼리 자동으로 묶는 비지도학습입니다."],
+    ["의사결정트리", "이미 알려진 세포 라벨을 학습해서 새로운 세포의 종류를 예측하는 지도학습입니다."],
+    ["회귀 분석", "세포 발달 단계처럼 숫자로 된 값을 예측하는 방법입니다."],
+    ["UMAP", "복잡한 세포 데이터를 2D 또는 3D 지도에 펼쳐 비슷한 세포끼리 가까이 보이게 합니다."],
+    ["Spatial", "세포가 조직 안에서 어디에 위치하는지 보여주는 공간 지도입니다."],
+    ["유전자/조절인자", "세포의 특징과 발달 방향을 설명할 수 있는 생물학적 단서입니다."],
+])
+st.dataframe(overview_df, use_container_width=True)
+
 with st.expander("🔍 이미지에서 추출한 간단한 특징 보기"):
+    st.write("아래 값은 이미지에서 자동 계산된 아주 기본적인 특징입니다.")
     st.dataframe(pd.DataFrame([image_features]), use_container_width=True)
     st.write("CSV 비교에 사용한 열:", ", ".join(candidate_basis_cols))
+    st.markdown("""
+    - **밝기**: 이미지가 전체적으로 밝은 정도입니다.
+    - **대비**: 밝고 어두운 차이가 얼마나 큰지 나타냅니다.
+    - **빨강/초록/파랑 평균**: 형광 이미지에서 색 성분이 어느 쪽에 강한지 보는 값입니다.
+    - 이 값들은 실제 생물학적 진단값이 아니라, CSV 데이터와 연결하기 위한 교육용 특징입니다.
+    """)
 
 st.markdown("<hr>", unsafe_allow_html=True)
 
@@ -471,6 +525,12 @@ st.markdown("<hr>", unsafe_allow_html=True)
 if analysis_mode == "🎨 K-Means 군집 분석":
     st.markdown('<div class="section-title">🎨 K-Means 군집 분석 결과</div>', unsafe_allow_html=True)
     st.info("비슷한 세포끼리 자동으로 묶은 뒤, 업로드 이미지와 가장 가까운 CSV 세포가 어느 cluster에 들어가는지 예측합니다.")
+    show_learning_box(
+        "📚 K-Means란?",
+        "K-Means는 정답 라벨을 보지 않고, 좌표상 가까운 데이터끼리 K개의 그룹으로 나누는 비지도학습 알고리즘입니다.",
+        "그래프에서 같은 색으로 표시된 점들은 서로 비슷한 세포 그룹입니다. 업로드 이미지는 빨간 별로 표시됩니다.",
+        "Cluster 번호 자체에는 생물학적 의미가 없습니다. 그래서 각 cluster 안에 가장 많이 들어 있는 세포 라벨을 찾아 쉬운 이름으로 해석합니다."
+    )
 
     if len(num2d) < 2:
         st.error("숫자형 좌표 열이 2개 이상 필요합니다.")
@@ -561,10 +621,24 @@ if analysis_mode == "🎨 K-Means 군집 분석":
     st.markdown("### 📊 Cluster별 쉬운 해석표")
     st.dataframe(cluster_result, use_container_width=True)
 
+    st.markdown("### 📝 학생용 해석 예시")
+    st.markdown(f"""
+    - 업로드 이미지와 가장 가까운 참고 세포는 **{predicted_name}** 계열로 해석됩니다.
+    - K-Means에서는 이 세포가 **Cluster {candidate_cluster}** 에 들어갔습니다.
+    - 이 cluster가 **{candidate_cluster_name}** 으로 해석된 이유는, 해당 군집 안에서 그 라벨을 가진 세포가 가장 많았기 때문입니다.
+    - 따라서 이 결과는 "이미지가 진짜로 {candidate_cluster_name}라는 뜻"이라기보다, **CSV 데이터 안에서 가장 비슷한 세포들이 모인 그룹이 {candidate_cluster_name} 성격을 가진다**는 의미입니다.
+    """)
+
 
 elif analysis_mode == "🌳 의사결정트리 분류":
     st.markdown('<div class="section-title">🌳 의사결정트리 분류 결과</div>', unsafe_allow_html=True)
     st.info("이미 알려진 세포 라벨을 학습해서, 업로드 이미지와 연결된 CSV 후보 세포가 어떤 세포인지 예측합니다.")
+    show_learning_box(
+        "📚 의사결정트리란?",
+        "의사결정트리는 '조건을 하나씩 물어보며' 분류하는 지도학습 모델입니다. 예를 들어 발달 단계 점수가 높은가, 특정 좌표가 큰가 같은 기준으로 세포를 나눕니다.",
+        "예측 결과에는 세포 이름, 큰 세포 그룹, 설명, 모델 정확도, 중요한 특성이 함께 나옵니다.",
+        "정확도가 높아도 100% 정답은 아닙니다. 데이터 품질과 선택한 특성에 따라 결과가 달라질 수 있습니다."
+    )
 
     if len(cat_cols) == 0:
         st.warning("분류에 사용할 문자형 라벨 열이 없습니다.")
@@ -629,10 +703,24 @@ elif analysis_mode == "🌳 의사결정트리 분류":
 
     st.dataframe(importance, use_container_width=True)
 
+    st.markdown("### 📝 학생용 해석 예시")
+    st.markdown(f"""
+    - 의사결정트리는 세포를 분류할 때 여러 숫자 특성 중 일부를 더 중요하게 사용합니다.
+    - 위 표에서 **중요도**가 큰 특성일수록 예측에 더 많이 영향을 준 기준입니다.
+    - 이번 업로드 이미지는 CSV에서 가장 가까운 후보 세포의 특성을 기준으로 **{candidate_easy}** 로 예측되었습니다.
+    - 모델 정확도 **{acc:.3f}** 는 테스트 데이터에서 예측이 얼마나 잘 맞았는지를 나타냅니다.
+    """)
+
 
 elif analysis_mode == "📈 회귀 분석":
     st.markdown('<div class="section-title">📈 회귀 분석 결과</div>', unsafe_allow_html=True)
     st.info("세포의 여러 숫자 정보를 이용해서 하나의 숫자값을 예측합니다. 예를 들어 세포 발달 단계나 스트레스 점수 등을 예측할 수 있습니다.")
+    show_learning_box(
+        "📚 회귀 분석이란?",
+        "회귀 분석은 세포 종류처럼 이름을 맞히는 것이 아니라, 발달 단계 점수처럼 숫자 값을 예측하는 방법입니다.",
+        "R²는 모델이 실제값을 얼마나 잘 설명하는지 나타내며 1에 가까울수록 좋습니다. MAE는 평균적으로 얼마나 틀리는지 나타냅니다.",
+        "R²가 낮으면 선택한 입력 특성만으로는 목표값을 잘 설명하지 못한다는 뜻입니다."
+    )
 
     all_numeric = numeric_columns(data2d)
     if len(all_numeric) < 2:
@@ -682,10 +770,24 @@ elif analysis_mode == "📈 회귀 분석":
     fig = style_plotly(fig)
     st.plotly_chart(fig, use_container_width=True)
 
+    st.markdown("### 📝 학생용 해석 예시")
+    st.markdown(f"""
+    - 그래프에서 점들이 대각선에 가까울수록 예측이 실제값과 비슷하다는 뜻입니다.
+    - 업로드 이미지는 CSV 후보 세포와 연결되어 **{friendly_numeric_meaning(target)}** 값이 **{candidate_value:.3f}** 로 예측되었습니다.
+    - R²가 높으면 입력 특성들이 목표값을 잘 설명하고, MAE가 작으면 예측 오차가 작습니다.
+    - 회귀 분석은 세포 이름을 맞히는 것이 아니라 **숫자값을 예측**하는 분석입니다.
+    """)
+
 
 elif analysis_mode == "🌈 UMAP 2D 시각화":
     st.markdown('<div class="section-title">🌈 UMAP 2D 시각화 결과</div>', unsafe_allow_html=True)
     st.info("세포들을 2차원 지도에 펼친 결과입니다. 가까운 점일수록 서로 비슷한 세포입니다.")
+    show_learning_box(
+        "📚 UMAP 2D란?",
+        "UMAP은 많은 특성을 가진 세포 데이터를 2차원 지도처럼 줄여서 보여주는 시각화 방법입니다.",
+        "점 하나는 세포 하나입니다. 가까운 점은 비슷한 세포, 멀리 떨어진 점은 차이가 큰 세포로 해석할 수 있습니다.",
+        "UMAP의 축 자체가 실제 거리나 길이를 뜻하는 것은 아닙니다. 전체적인 군집 구조를 보는 용도로 사용합니다."
+    )
 
     if len(num2d) < 2:
         st.error("UMAP 2D 좌표 열이 부족합니다.")
@@ -725,10 +827,23 @@ elif analysis_mode == "🌈 UMAP 2D 시각화":
     st.write(f"📌 예측 세포 이름: **{predicted_name}**")
     st.write(f"📌 근거: 이미지 특징과 가장 가까운 CSV 세포의 UMAP 좌표를 빨간 별(★)로 표시했습니다.")
 
+    st.markdown("### 📝 학생용 해석 예시")
+    st.markdown(f"""
+    - 빨간 별은 업로드 이미지와 가장 비슷한 CSV 세포의 위치입니다.
+    - 빨간 별 주변의 점들이 같은 색으로 많이 모여 있다면, 업로드 이미지도 그 세포 그룹과 비슷하다고 해석할 수 있습니다.
+    - UMAP은 복잡한 데이터를 보기 쉽게 펼친 지도이므로, 정확한 수치보다 **군집의 모양과 위치**를 보는 것이 중요합니다.
+    """)
+
 
 elif analysis_mode == "🧊 UMAP 3D 시각화":
     st.markdown('<div class="section-title">🧊 UMAP 3D 시각화 결과</div>', unsafe_allow_html=True)
     st.info("세포들의 관계를 3차원 공간에서 입체적으로 보여줍니다.")
+    show_learning_box(
+        "📚 UMAP 3D란?",
+        "UMAP 3D는 2D보다 한 축을 더 사용해서 세포 사이의 관계를 입체적으로 보여줍니다.",
+        "마우스로 돌려보면서 서로 가까운 세포 그룹, 떨어져 있는 세포 그룹을 확인할 수 있습니다.",
+        "3D에서는 보기 각도에 따라 가까워 보이거나 멀어 보일 수 있으므로 여러 방향에서 확인해야 합니다."
+    )
 
     if len(num3d) < 3:
         st.error("UMAP 3D 좌표 열이 부족합니다.")
@@ -772,10 +887,23 @@ elif analysis_mode == "🧊 UMAP 3D 시각화":
     st.write("📌 근거: 이미지 특징과 가장 가까운 CSV 세포의 3D UMAP 위치를 빨간 표시로 나타냈습니다.")
     st.write("📌 가까운 공간에 모인 세포들은 서로 비슷한 세포일 가능성이 큽니다.")
 
+    st.markdown("### 📝 학생용 해석 예시")
+    st.markdown("""
+    - 3D UMAP은 세포 사이의 관계를 입체적으로 확인할 수 있습니다.
+    - 빨간 표시가 어떤 세포 무리 안에 있으면 그 무리와 비슷한 특징을 가진다고 볼 수 있습니다.
+    - 2D에서 겹쳐 보이는 세포들도 3D에서는 더 분리되어 보일 수 있습니다.
+    """)
+
 
 elif analysis_mode == "📍 Spatial 시각화":
     st.markdown('<div class="section-title">📍 Spatial 시각화 결과</div>', unsafe_allow_html=True)
     st.info("세포가 조직 안에서 어느 위치에 있는지 보여줍니다.")
+    show_learning_box(
+        "📚 Spatial 시각화란?",
+        "Spatial 시각화는 세포가 실제 조직 안에서 어느 위치에 있는지 보여주는 공간 지도입니다.",
+        "같은 색의 세포가 특정 영역에 몰려 있으면 그 세포 유형이 그 영역에 많이 분포한다고 볼 수 있습니다.",
+        "공간 위치는 데이터가 수집된 조직 절편과 좌표 기준에 따라 달라질 수 있습니다."
+    )
 
     if len(numsp) < 2:
         st.error("Spatial 좌표 열이 부족합니다.")
@@ -819,10 +947,23 @@ elif analysis_mode == "📍 Spatial 시각화":
     st.write("📌 근거: 이미지 특징과 가장 가까운 CSV 세포의 공간 좌표를 빨간 별(★)로 표시했습니다.")
     st.write("📌 같은 색 세포가 특정 영역에 모이면 그 세포 그룹이 그 위치에 많이 분포한다는 뜻입니다.")
 
+    st.markdown("### 📝 학생용 해석 예시")
+    st.markdown(f"""
+    - 업로드 이미지는 CSV 후보 세포의 위치를 기준으로 조직의 **{horizontal} {vertical} 영역**과 연결되었습니다.
+    - 이 영역 주변에 같은 색 세포가 많다면, 비슷한 세포들이 그 조직 위치에 많이 모여 있다는 뜻입니다.
+    - Spatial 결과는 세포 종류뿐 아니라 **세포가 어디에 있는지**까지 함께 해석할 수 있다는 장점이 있습니다.
+    """)
+
 
 elif analysis_mode == "🧬 유전자/조절인자 탐색":
     st.markdown('<div class="section-title">🧬 유전자/조절인자 탐색 결과</div>', unsafe_allow_html=True)
     st.info("유전자와 조절인자는 세포가 어떤 성격을 가지는지 알려주는 단서입니다.")
+    show_learning_box(
+        "📚 유전자와 조절인자란?",
+        "유전자는 세포의 기능과 특징을 만드는 정보이고, 조절인자는 다른 유전자가 켜지거나 꺼지는 데 영향을 주는 스위치 같은 역할을 합니다.",
+        "점수가 높거나 관련성이 높은 유전자·조절인자는 해당 세포의 특징을 설명하는 단서로 볼 수 있습니다.",
+        "이 표는 후보를 보여주는 것이며, 실제 생물학적 결론을 내리려면 추가 실험과 검증이 필요합니다."
+    )
 
     tab1, tab2 = st.tabs(["🧬 유전자 탐색", "🎯 조절인자 탐색"])
 
@@ -844,6 +985,13 @@ elif analysis_mode == "🧬 유전자/조절인자 탐색":
         st.write("📌 근거: 유전자 메타데이터에서 발현량 또는 module 정보를 이용해 관련 후보를 보여줍니다.")
         st.dataframe(related.head(50), use_container_width=True)
 
+        st.markdown("### 📝 학생용 해석 예시")
+        st.markdown(f"""
+        - 유전자는 세포의 특징을 설명하는 생물학적 단서입니다.
+        - 예측 세포가 **{predicted_name}** 이라면, 위 유전자 후보들은 그 세포의 특징을 이해하는 데 참고할 수 있습니다.
+        - 단, 유전자 후보가 있다고 해서 바로 결론을 내릴 수는 없고, 추가 검증이 필요합니다.
+        """)
+
     with tab2:
         st.markdown("### 🎯 업로드 이미지 후보 세포의 조절인자 점수")
         reg_row = regulators.iloc[[candidate_idx]].copy()
@@ -861,6 +1009,13 @@ elif analysis_mode == "🧬 유전자/조절인자 탐색":
         st.write(f"📌 예측 세포 이름: **{predicted_name}**")
         st.write("📌 근거: 업로드 이미지와 가장 가까운 CSV 세포의 조절인자 점수를 가져와 높은 순서로 정렬했습니다.")
         st.dataframe(long_reg, use_container_width=True)
+
+        st.markdown("### 📝 학생용 해석 예시")
+        st.markdown("""
+        - 조절인자는 유전자 활동을 조절하는 스위치 같은 역할을 합니다.
+        - 점수가 높은 조절인자는 해당 후보 세포의 발달 방향이나 특징과 관련이 클 수 있습니다.
+        - 이 결과는 '가설을 세우는 단계'로 볼 수 있으며, 실제 연구에서는 추가 실험으로 확인합니다.
+        """)
 
 st.markdown("<hr>", unsafe_allow_html=True)
 st.caption("🧠 Brain Cell AI Explorer | 이미지 참고 + CSV 기반 뇌세포 예측 및 근거 출력 Streamlit App")
