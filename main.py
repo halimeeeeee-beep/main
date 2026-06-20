@@ -364,6 +364,67 @@ def best_label_column(df):
     return None
 
 
+def friendly_numeric_meaning(col):
+    """숫자형 열 이름을 쉬운 표현으로 바꾸기"""
+    c = str(col).lower()
+    if "pseudotime" in c:
+        return "세포 발달 단계 점수"
+    if "branch" in c:
+        return "세포 발달 갈림길 점수"
+    if "umap" in c and ("1" in c or "x" in c):
+        return "UMAP 가로 위치"
+    if "umap" in c and ("2" in c or "y" in c):
+        return "UMAP 세로 위치"
+    if "umap" in c and "3" in c:
+        return "UMAP 입체 높이 위치"
+    if c in ["x", "spatial_x", "coord_x"] or "spatial" in c and "x" in c:
+        return "조직 안 가로 위치"
+    if c in ["y", "spatial_y", "coord_y"] or "spatial" in c and "y" in c:
+        return "조직 안 세로 위치"
+    return str(col)
+
+
+def regression_quality_text(r2, mae):
+    if r2 >= 0.8:
+        quality = "매우 잘 맞는 예측"
+    elif r2 >= 0.5:
+        quality = "어느 정도 설명력이 있는 예측"
+    elif r2 >= 0.2:
+        quality = "약한 예측"
+    else:
+        quality = "설명력이 낮은 예측"
+
+    return (
+        f"이 회귀모델은 '{quality}'입니다. "
+        f"R²={r2:.3f}는 모델이 실제 값을 얼마나 잘 설명하는지 나타내며, 1에 가까울수록 좋습니다. "
+        f"MAE={mae:.3f}는 예측값이 실제값과 평균적으로 얼마나 차이 나는지를 뜻합니다."
+    )
+
+
+def umap_easy_explanation(mode="2D"):
+    if mode == "2D":
+        return (
+            "UMAP 2D는 복잡한 세포 데이터를 평면 지도처럼 펼친 그림입니다. "
+            "점 하나가 세포 하나이고, 가까이 모인 점들은 서로 비슷한 세포일 가능성이 큽니다."
+        )
+    return (
+        "UMAP 3D는 세포 사이의 관계를 입체 공간에서 보는 그림입니다. "
+        "2D에서 겹쳐 보이던 세포 그룹도 3D에서는 더 잘 분리되어 보일 수 있습니다."
+    )
+
+
+def spatial_easy_explanation():
+    return (
+        "Spatial 시각화는 세포가 실제 조직 안에서 어느 위치에 있는지 보여주는 지도입니다. "
+        "특정 색의 세포가 한곳에 몰려 있으면, 그 세포 그룹이 특정 영역에 많이 분포한다는 뜻입니다."
+    )
+
+
+def describe_gene_or_regulator_row(row):
+    text = " / ".join([f"{c}: {row[c]}" for c in row.index[:4]])
+    return text
+
+
 def style_plotly(fig):
     fig.update_layout(
         paper_bgcolor="rgba(255,246,250,0.95)",
@@ -726,27 +787,39 @@ elif analysis_mode == "📈 회귀 분석":
     col1.metric("📊 R² 결정계수", f"{r2:.3f}")
     col2.metric("📉 MAE 평균절대오차", f"{mae:.3f}")
 
+    st.markdown("### 🧠 회귀 분석 결과를 쉽게 해석하기")
+    st.info(regression_quality_text(r2, mae))
+    st.write(f"🎯 예측하려는 값: **{friendly_numeric_meaning(target)}** (`{target}`)")
+    st.write("📌 입력으로 사용한 정보: " + ", ".join([f"**{friendly_numeric_meaning(c)}** (`{c}`)" for c in features]))
+
     result = pd.DataFrame({
         "실제값": y_test,
         "예측값": pred
     })
+    result["차이"] = (result["실제값"] - result["예측값"]).abs()
+    result["쉬운 해석"] = result["차이"].apply(
+        lambda v: "예측이 실제값과 매우 비슷함" if v <= mae else "평균보다 차이가 큰 예측"
+    )
 
     fig = px.scatter(
         result,
         x="실제값",
         y="예측값",
         title="📈 실제값 vs 예측값",
-        template="plotly_white"
+        template="plotly_white",
+        hover_data=["차이", "쉬운 해석"]
     )
     fig = style_plotly(fig)
     st.plotly_chart(fig, use_container_width=True)
 
-    st.dataframe(result.head(50), use_container_width=True)
+    st.markdown("### 📋 세포별 예측 결과")
+    st.dataframe(result.head(80), use_container_width=True)
 
 
 elif analysis_mode == "🌈 UMAP 2D 시각화":
     st.markdown('<div class="section-title">🌈 UMAP 2D 시각화</div>', unsafe_allow_html=True)
-    st.info("💡 논문 그림처럼 보이도록 흰 그래프 배경, 작은 점, 진한 축, UMAP_1 / UMAP_2 축 이름을 적용했습니다.")
+    st.info("💡 " + umap_easy_explanation("2D"))
+    st.caption("가까운 점끼리는 비슷한 세포입니다. 색이 다르게 나뉘면 서로 다른 세포 그룹으로 볼 수 있습니다.")
 
     if len(num2d) < 2:
         st.error("UMAP 2D 좌표 열이 부족합니다.")
@@ -791,12 +864,24 @@ elif analysis_mode == "🌈 UMAP 2D 시각화":
     fig = style_umap2d_publication(fig, x_col, y_col)
     st.plotly_chart(fig, use_container_width=True)
 
+    st.markdown("### 🧬 UMAP 2D 결과 해석")
+    if color_col == "K-Means 자동 군집":
+        umap_summary = plot_df["cluster"].value_counts().sort_index().reset_index()
+        umap_summary.columns = ["그룹 번호", "세포 수"]
+        umap_summary["쉬운 해석"] = umap_summary["그룹 번호"].apply(
+            lambda x: f"UMAP 지도에서 서로 가까운 세포들의 {x}번 그룹입니다."
+        )
+        st.dataframe(umap_summary, use_container_width=True)
+    else:
+        st.write(f"색상은 **{color_col}** 기준입니다. 같은 색으로 모인 점들은 비슷한 특징을 가진 세포로 해석할 수 있습니다.")
+
     st.markdown("### 🧬 UMAP 2D 데이터 미리보기")
     st.dataframe(plot_df.head(100), use_container_width=True)
 
 
 elif analysis_mode == "🧊 UMAP 3D 시각화":
     st.markdown('<div class="section-title">🧊 UMAP 3D 시각화</div>', unsafe_allow_html=True)
+    st.info("💡 " + umap_easy_explanation("3D"))
 
     if len(num3d) < 3:
         st.error("UMAP 3D 좌표 열이 부족합니다.")
@@ -836,11 +921,18 @@ elif analysis_mode == "🧊 UMAP 3D 시각화":
     )
     st.plotly_chart(fig, use_container_width=True)
 
+    st.markdown("### 🧠 UMAP 3D 결과 해석")
+    st.write("점 하나는 세포 하나입니다. 입체 공간에서 가까운 점들은 비슷한 세포이고, 멀리 떨어진 점들은 서로 다른 특성을 가진 세포일 가능성이 큽니다.")
+    if color_col != "없음":
+        st.write(f"현재 색상은 **{color_col}** 기준입니다. 같은 색이 한 공간에 모이면 그 세포들이 비슷한 그룹을 이룬다는 뜻입니다.")
+
+    st.markdown("### 🧬 UMAP 3D 데이터 미리보기")
     st.dataframe(data3d.head(100), use_container_width=True)
 
 
 elif analysis_mode == "📍 Spatial 시각화":
     st.markdown('<div class="section-title">📍 Spatial 시각화</div>', unsafe_allow_html=True)
+    st.info("💡 " + spatial_easy_explanation())
 
     if len(numsp) < 2:
         st.error("Spatial 좌표 열이 부족합니다.")
@@ -867,6 +959,13 @@ elif analysis_mode == "📍 Spatial 시각화":
     fig = style_plotly(fig)
     st.plotly_chart(fig, use_container_width=True)
 
+    st.markdown("### 📍 Spatial 결과 해석")
+    st.write("이 그림은 세포가 조직 안에서 어디에 위치하는지 보여줍니다.")
+    if color_col != "없음":
+        st.write(f"현재 색상은 **{color_col}** 기준입니다. 같은 색이 특정 영역에 몰려 있으면 그 세포 그룹이 그 위치에 많이 존재한다는 뜻입니다.")
+    st.write("예를 들어 특정 세포가 한쪽 영역에만 많이 모여 있다면, 그 영역에서 중요한 역할을 할 가능성이 있습니다.")
+
+    st.markdown("### 🧬 Spatial 데이터 미리보기")
     st.dataframe(datasp.head(100), use_container_width=True)
 
 
@@ -877,7 +976,11 @@ elif analysis_mode == "🧬 유전자/조절인자 탐색":
 
     with tab1:
         st.write("### 🧬 유전자 메타데이터")
-        st.dataframe(gene_metadata.head(300), use_container_width=True)
+        st.info("유전자 메타데이터는 각 유전자가 어떤 이름과 특징을 가지는지 정리한 표입니다. 세포의 성격을 이해하는 데 사용됩니다.")
+
+        gene_view = gene_metadata.copy()
+        gene_view["쉬운 설명"] = "이 유전자는 세포 특징을 설명하는 데 사용될 수 있는 후보 정보입니다."
+        st.dataframe(gene_view.head(300), use_container_width=True)
 
         if len(gene_metadata.columns) > 0:
             search_gene = st.text_input("🔎 유전자 검색어 입력")
@@ -886,11 +989,18 @@ elif analysis_mode == "🧬 유전자/조절인자 탐색":
                     lambda row: row.str.contains(search_gene, case=False, na=False).any(),
                     axis=1
                 )
-                st.dataframe(gene_metadata[mask], use_container_width=True)
+                result_gene = gene_metadata[mask].copy()
+                result_gene["쉬운 해석"] = "검색한 유전자와 관련된 정보입니다. 특정 세포 유형을 구분하는 단서가 될 수 있습니다."
+                st.markdown("### 🔍 검색된 유전자 결과")
+                st.dataframe(result_gene, use_container_width=True)
 
     with tab2:
-        st.write("### 🎯 Ground Truth Regulators")
-        st.dataframe(regulators.head(300), use_container_width=True)
+        st.write("### 🎯 조절인자 탐색")
+        st.info("조절인자는 다른 유전자의 활동을 켜거나 끄는 스위치 같은 역할을 합니다. 어떤 세포가 어떤 방향으로 발달하는지 이해하는 데 중요합니다.")
+
+        reg_view = regulators.copy()
+        reg_view["쉬운 설명"] = "이 조절인자는 세포 발달이나 세포 유형 결정에 영향을 줄 수 있는 후보입니다."
+        st.dataframe(reg_view.head(300), use_container_width=True)
 
         if len(regulators.columns) > 0:
             search_reg = st.text_input("🔎 조절인자 검색어 입력")
@@ -899,7 +1009,10 @@ elif analysis_mode == "🧬 유전자/조절인자 탐색":
                     lambda row: row.str.contains(search_reg, case=False, na=False).any(),
                     axis=1
                 )
-                st.dataframe(regulators[mask], use_container_width=True)
+                result_reg = regulators[mask].copy()
+                result_reg["쉬운 해석"] = "검색한 조절인자는 세포의 특징이나 발달 방향을 결정하는 데 관여할 수 있습니다."
+                st.markdown("### 🔍 검색된 조절인자 결과")
+                st.dataframe(result_reg, use_container_width=True)
 
 
 st.markdown("<hr>", unsafe_allow_html=True)
